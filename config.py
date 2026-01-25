@@ -49,15 +49,15 @@ class Config:
     )
     # ---- Video segmentation ----
     clip_len_frames: int = 8
-    clip_stride_frames: int = 8
+    clip_stride_frames: int = 16
     fps_hint: Optional[float] = None
 
     # ---- Sampling ----
     sample_strategy: str = "uniform"  # "uniform" | "head"
 
     # ---- Retrieval ----
-    top_k: int = 5
-    batch_size_clips: int = 16
+    top_k: int = 1
+    batch_size_clips: int = 8
     normalize_embeddings: bool = True
 
     # ---- Cache policy ----
