@@ -14,7 +14,7 @@ video_all = video.copy()
 count = count_video(r'C:\Users\user\Documents\Prodjeeeect\all_func\video_split', False)
 
 for i in count:
-    if not person_detect(rf"C:\Users\user\Documents\Prodjeeeect\all_func\video_split\part_00{i}.mp4"):
+    if not person_detect(rf"C:\Users\user\Documents\Prodjeeeect\all_func\video_split\part_00{i}.mp4", 8):
         video.pop(i)
 
 print(*video, sep="\n")
