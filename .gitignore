@@ -1,0 +1,20 @@
+# created by virtualenv automatically
+workspace.xml
+*.mp4
+Videos/
+cache/
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual env
+.venv/
+venv/
+
+# IDE (PyCharm/IntelliJ)
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

@@ -82,75 +82,74 @@ def _squeeze_singletons(t: torch.Tensor) -> torch.Tensor:
 
 
 @torch.no_grad()
-def encode_videos(
-    model: XCLIPModel,
-    processor: XCLIPProcessor,
-    videos_rgb_uint8: np.ndarray,  # [B,T,H,W,3] uint8 RGB
-    device: Optional[str] = None,
-    normalize: Optional[bool] = None,
-    cfg: Optional[object] = None,
-) -> torch.Tensor:
-    """
-    Надёжный путь для твоей ситуации:
-    - НЕ используем processor(videos=...) (у тебя он возвращал пусто)
-    - НЕ используем model.get_video_features() (падал tuple.pooler_output)
-    - Берём кадры как images -> pixel_values 4D -> model.vision_model -> mean по T
-    """
+def encode_videos(model, processor, videos_rgb_uint8, device=None, normalize=None, cfg=None):
     from PIL import Image
+    import torch
+    import numpy as np
 
     device = pick(device, cfg, "device", "cpu")
     normalize = pick(normalize, cfg, "normalize_embeddings", True)
 
     if videos_rgb_uint8.dtype != np.uint8:
-        # processor ожидает uint8 или PIL.Image; приведём мягко
         videos_rgb_uint8 = videos_rgb_uint8.astype(np.uint8, copy=False)
 
-    if videos_rgb_uint8.ndim != 5:
-        raise ValueError(f"videos_rgb_uint8 must be 5D [B,T,H,W,3], got {videos_rgb_uint8.shape}")
-
     B, T, H, W, C = videos_rgb_uint8.shape
-    if C != 3:
-        raise ValueError(f"Expected RGB frames with 3 channels, got shape {videos_rgb_uint8.shape}")
+    assert C == 3
 
-    # Соберём все кадры всех видео в один список картинок (B*T)
-    frames_pil: List[Image.Image] = []
-    for i in range(B):
-        for t in range(T):
-            frames_pil.append(Image.fromarray(videos_rgb_uint8[i, t]))
+    # 1) preprocess frames as images (stable on твоей версии transformers)
+    frames = [Image.fromarray(videos_rgb_uint8[i, t]) for i in range(B) for t in range(T)]
+    out = processor(images=frames, return_tensors="pt")
+    pixel_values = out["pixel_values"]  # [B*T, 3, H', W'] обычно
 
-    out = processor(images=frames_pil, return_tensors="pt")
-    if "pixel_values" not in out:
-        raise RuntimeError(f"processor(images=...) did not return pixel_values. Keys: {list(out.keys())}")
+    # иногда processor добавляет лишние оси 1 — убираем
+    while pixel_values.dim() > 4 and 1 in pixel_values.shape:
+        for d in range(pixel_values.dim()):
+            if pixel_values.shape[d] == 1:
+                pixel_values = pixel_values.squeeze(d)
+                break
 
-    pixel_values = out["pixel_values"]  # обычно [B*T, 3, H', W']
-    if not isinstance(pixel_values, torch.Tensor):
-        pixel_values = torch.as_tensor(pixel_values)
-
-    pixel_values = _squeeze_singletons(pixel_values)
-
-    # гарантируем 4D: [N,3,H,W]
     if pixel_values.dim() != 4:
-        raise RuntimeError(f"Unexpected pixel_values shape: {tuple(pixel_values.shape)} (expected 4D [N,3,H,W])")
+        raise RuntimeError(f"pixel_values must be 4D [N,3,H,W], got {tuple(pixel_values.shape)}")
 
     pixel_values = pixel_values.to(device)
 
-    # Прогоняем через vision tower (она НЕ требует input_ids)
-    # Прогоняем через vision tower
-    vision_out = model.vision_model(pixel_values=pixel_values, return_dict=True)
+    # 2) vision tower (кадровые фичи)
+    # return_dict=False специально: тогда даже если HF чудит, мы стабильно читаем tuple
+    vision_out = model.vision_model(pixel_values=pixel_values, return_dict=False)
 
-    frame_feats = vision_out.pooler_output
-    if frame_feats is None:
-        frame_feats = vision_out.last_hidden_state[:, 0]  # CLS  -> [B*T, hidden_size=768]
-
-    # >>> ВАЖНО: проектируем hidden_size -> projection_dim (обычно 512), чтобы совпало с text
-    if hasattr(model, "visual_projection") and model.visual_projection is not None:
-        frame_feats = model.visual_projection(frame_feats)  # [B*T, 512]
+    # Обычно: (last_hidden_state, pooler_output, ...)
+    if isinstance(vision_out, (tuple, list)):
+        last_hidden = vision_out[0]
+        pooled = vision_out[1] if len(vision_out) > 1 and vision_out[1] is not None else last_hidden[:, 0]
     else:
-        raise RuntimeError("У модели нет visual_projection — не могу привести video feats к размерности текста.")
+        last_hidden = vision_out.last_hidden_state
+        pooled = vision_out.pooler_output if vision_out.pooler_output is not None else last_hidden[:, 0]
 
-    # [B*T, D] -> [B, T, D] -> mean over T
-    video_feats = frame_feats.view(B, T, -1).mean(dim=1)
+    # pooled: [B*T, hidden] -> [B, T, hidden]
+    # pooled: [B*T, 768] (или другой hidden), но mit у тебя ждёт 512
+    # 1) project -> 512
+    if not hasattr(model, "visual_projection") or model.visual_projection is None:
+        raise RuntimeError("model.visual_projection missing; can't match MIT dim")
+
+    frame_feats_512 = model.visual_projection(pooled)  # [B*T, 512]
+
+    # 2) [B*T, 512] -> [B, T, 512]
+    frame_feats_512 = frame_feats_512.view(B, T, -1)
+
+    # 3) MIT (без kwargs, твоя версия не принимает inputs_embeds)
+    mit_out = model.mit(frame_feats_512)
+
+    # 4) аккуратно достаём pooled/CLS (tuple vs ModelOutput)
+    if isinstance(mit_out, (tuple, list)):
+        mit_last = mit_out[0]
+        mit_pooled = mit_out[1] if len(mit_out) > 1 and mit_out[1] is not None else mit_last[:, 0]
+    else:
+        mit_last = mit_out.last_hidden_state
+        mit_pooled = mit_out.pooler_output if getattr(mit_out, "pooler_output", None) is not None else mit_last[:, 0]
+
+    video_feats = mit_pooled  # уже [B, 512]
 
     if normalize:
         video_feats = torch.nn.functional.normalize(video_feats, dim=-1)
+
     return video_feats
