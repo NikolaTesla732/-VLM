@@ -58,7 +58,6 @@ def extract_top_times(results_list: List[Dict[str, Any]], n: int) -> List[Dict[s
 # ffmpeg tools
 # ----------------------------
 def ensure_ffmpeg_tools() -> None:
-    # и ffmpeg и ffprobe (длительность видео)
     subprocess.run(["ffmpeg", "-version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     subprocess.run(["ffprobe", "-version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -170,20 +169,27 @@ def process_one_video(
       - indexing/retrieve если нужно
       - сохраняет results.json (+ top_times)
       - опционально экспортирует top-k клипы
-      - возвращает payload с таймингами
+      - возвращает payload с таймингами + stage_times
     """
     ensure_all_cache_dirs(cfg=cfg)
 
     if cfg_dict is None:
         cfg_dict = asdict(cfg)
 
-    # куда сохранять клипы (по умолчанию: batch_out/clips если есть в cfg, иначе ./batch_out/clips)
+    # stage timing helper
+    stage: Dict[str, Any] = {}
+
+    def _mark(name: str, t_start: float, t_end: float):
+        stage[f"{name}_sec"] = t_end - t_start
+        stage[f"{name}_hms"] = fmt_hms(stage[f"{name}_sec"])
+
+    # куда сохранять клипы
     if clips_root is None:
         out_dir = getattr(cfg, "batch_out_dir", "./batch_out")
         clips_subdir = getattr(cfg, "clips_subdir", "clips")
         clips_root = os.path.join(out_dir, clips_subdir)
 
-    # knobs (берём из cfg если есть; иначе дефолты)
+    # knobs
     top_k = int(getattr(cfg, "top_k", 5))
     save_top_n_times = int(getattr(cfg, "save_top_n_times", top_k))
 
@@ -197,21 +203,22 @@ def process_one_video(
     pad_sec = float(getattr(cfg, "pad_sec", 2.0))
     reencode = bool(getattr(cfg, "reencode", True))
 
-    # paths
     index_path = make_index_path(video_path=video_path, model_name=cfg.model_name, cfg=cfg)
     results_path = make_results_path(video_path=video_path, model_name=cfg.model_name, query=query, cfg=cfg)
 
-    # timings
+    # total timing
     t0 = time.perf_counter()
 
-    # duration (контент)
-    # ffprobe может быть не установлен — тогда просто 0.0
+    # video duration (content)
     dur_sec = 0.0
     try:
         ensure_ffmpeg_tools()
         dur_sec = video_duration_sec_ffprobe(video_path)
     except Exception:
-        pass
+        dur_sec = 0.0
+
+    # ---- cache check stage
+    t_cache0 = time.perf_counter()
 
     # 1) results cache
     if cache_results and os.path.exists(results_path):
@@ -221,7 +228,13 @@ def process_one_video(
         if top_times is None:
             top_times = extract_top_times(results_list, save_top_n_times)
 
+        t_cache1 = time.perf_counter()
+        _mark("cache_check", t_cache0, t_cache1)
+
         elapsed = time.perf_counter() - t0
+        stage["total_sec"] = elapsed
+        stage["total_hms"] = fmt_hms(elapsed)
+
         return {
             "video": video_path,
             "query": query,
@@ -237,9 +250,15 @@ def process_one_video(
             "video_duration_hms": fmt_hms(dur_sec),
             "processing_time_sec": elapsed,
             "processing_time_hms": fmt_hms(elapsed),
+            "stage_times": stage,
         }
 
-    # 2) index cache / reindex
+    t_cache1 = time.perf_counter()
+    _mark("cache_check", t_cache0, t_cache1)
+
+    # ---- index stage
+    t_index0 = time.perf_counter()
+
     index = None
     cached_index = False
     if cache_index and os.path.exists(index_path) and not force_reindex:
@@ -253,11 +272,19 @@ def process_one_video(
         if cache_index:
             save_index(index_path, index=index, cfg_dict=cfg_dict)
 
-    # 3) retrieve
+    t_index1 = time.perf_counter()
+    _mark("index_build_or_load", t_index0, t_index1)
+
+    # ---- retrieve stage
+    t_ret0 = time.perf_counter()
     results_list = retrieve_topk_segments(index, model, processor, query, cfg=cfg)
+    t_ret1 = time.perf_counter()
+    _mark("retrieve", t_ret0, t_ret1)
+
     top_times = extract_top_times(results_list, save_top_n_times)
 
-    # 4) save results
+    # ---- save results (very small, but still track)
+    t_save0 = time.perf_counter()
     if cache_results:
         save_results_json(results_path, {
             "video": video_path,
@@ -267,8 +294,11 @@ def process_one_video(
             "results_list": results_list,
             "top_times": top_times,
         })
+    t_save1 = time.perf_counter()
+    _mark("save_results", t_save0, t_save1)
 
-    # 5) export clips
+    # ---- export stage
+    t_exp0 = time.perf_counter()
     saved_clips: List[str] = []
     clips_dir = ""
     if export_clips:
@@ -285,14 +315,17 @@ def process_one_video(
                 pad_sec=pad_sec,
                 reencode=reencode,
             )
-        except Exception as e:
-            # экспорт — необязателен: если сломается ffmpeg, пайплайн всё равно вернёт результаты
+        except Exception:
             saved_clips = []
             clips_dir = ""
-            # можно сохранить сообщение:
-            # print("Clip export failed:", e)
+
+    t_exp1 = time.perf_counter()
+    _mark("export", t_exp0, t_exp1)
 
     elapsed = time.perf_counter() - t0
+    stage["total_sec"] = elapsed
+    stage["total_hms"] = fmt_hms(elapsed)
+
     return {
         "video": video_path,
         "query": query,
@@ -309,4 +342,5 @@ def process_one_video(
         "video_duration_hms": fmt_hms(dur_sec),
         "processing_time_sec": elapsed,
         "processing_time_hms": fmt_hms(elapsed),
+        "stage_times": stage,
     }

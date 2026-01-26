@@ -8,8 +8,8 @@ from dataclasses import dataclass
 class Config:
     args = argparse.Namespace(
         mode="batch",           # single или "batch"
-        video="Videos/",
-        query="Vandalism",
+        video="Videos/Steal",
+        query="Stealing",
         show=True,
     )
     # -------- Model / device --------
@@ -20,7 +20,7 @@ class Config:
 
     # -------- Clip segmentation / indexing --------
     clip_len_frames: int = 8
-    clip_stride_frames: int = 32
+    clip_stride_frames: int = 64
     sample_strategy: str = "uniform"   # "uniform" | "head"
     batch_size_clips: int = 32          # сколько клипов прогонять за раз (если у тебя есть batching)
 
@@ -28,12 +28,8 @@ class Config:
     top_k: int = 5                     # сколько результатов искать/показывать
 
     # -------- Batch run inputs/outputs --------
-    videos_dir: str = "./Videos"
     batch_out_dir: str = "./batch_out"
     clips_subdir: str = "clips"        # внутри batch_out_dir
-
-    # -------- Query --------
-    query: str = "Vandalism"
 
     # -------- Clip export (ffmpeg) --------
     export_clips: bool = True

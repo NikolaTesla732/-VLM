@@ -16,7 +16,7 @@ def _fmt_time(t: Optional[float]) -> str:
 def show_top_segments(
     video_path: str,
     results_list: list[dict],
-    max_clips: int = 5,
+    max_clips: int = 1,
     delay: float = 0.2,
     *,
     max_frames_per_clip: Optional[int] = 200,
