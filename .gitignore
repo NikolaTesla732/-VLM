@@ -3,6 +3,7 @@ workspace.xml
 *.mp4
 Videos/
 cache/
+batch_out/
 # Python
 __pycache__/
 *.py[cod]

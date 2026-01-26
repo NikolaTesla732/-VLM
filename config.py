@@ -1,71 +1,51 @@
 # config.py
-from dataclasses import dataclass, field
-from typing import Optional
+from __future__ import annotations
+
 import argparse
-@dataclass
-class CachePaths:
-    # Корневая директория для всех артефактов пайплайна (кэш/логи/результаты).
-    root_dir: str = "./cache"
-
-    # Где хранится ИНДЕКС видео (эмбеддинги клипов + ranges + мета + cfg_hash).
-    # Обычно самый “тяжёлый” артефакт, пересчитывать дорого.
-    index_dir: str = "./cache/index"
-
-    # Где хранится РЕЗУЛЬТАТ конкретного запроса (top-k клипы + таймкоды + score) в JSON.
-    # Это самый быстрый кэш: если есть results — индекс/модель можно даже не трогать.
-    results_dir: str = "./cache/results"
-
-    # Где хранится служебная информация/логи эксперимента (опционально, но путь задаём явно).
-    # Можно писать сюда summary, параметры запуска, time profiling, ошибки.
-    run_meta_dir: str = "./cache/run_meta"
-
-    # Расширение файла индекса (torch.save).
-    index_ext: str = ".pt"
-
-    # Расширение файла результатов (json).
-    results_ext: str = ".json"
-
-    # Шаблон имени индекса. {key} — стабильный хэш (video_path + model_name).
-    index_name_tpl: str = "index_{key}"
-
-    # Шаблон имени результатов. {key} — стабильный хэш (video_path + model_name + query).
-    results_name_tpl: str = "results_{key}"
-
-    # Файл с “последним запуском”/служебной инфой (в run_meta_dir).
-    # Можно хранить последний video/query/cfg для удобства дебага.
-    last_run_name: str = "last_run.json"
-
+from dataclasses import dataclass
 
 @dataclass
 class Config:
-    # ---- Model ----
-    model_name: str = "microsoft/xclip-base-patch16"
-    device: str = "cpu"         # "cuda" or "cpu"
-    dtype: str = "fp16"          # "fp16" | "fp32"
-    use_torch_compile: bool = False
     args = argparse.Namespace(
-        video="./Videos/video.mp4",
-        query="The man left the frame",
+        mode="batch",           # single или "batch"
+        video="Videos/",
+        query="Vandalism",
+        show=True,
     )
-    # ---- Video segmentation ----
+    # -------- Model / device --------
+    model_name: str = "microsoft/xclip-base-patch16"
+    device: str = "cpu"          # "cuda:0" если есть
+    dtype: str = "fp32"          # "fp16" для cuda обычно
+    use_torch_compile: bool = False
+
+    # -------- Clip segmentation / indexing --------
     clip_len_frames: int = 8
-    clip_stride_frames: int = 16
-    fps_hint: Optional[float] = None
+    clip_stride_frames: int = 32
+    sample_strategy: str = "uniform"   # "uniform" | "head"
+    batch_size_clips: int = 32          # сколько клипов прогонять за раз (если у тебя есть batching)
 
-    # ---- Sampling ----
-    sample_strategy: str = "uniform"  # "uniform" | "head"
+    # -------- Retrieval --------
+    top_k: int = 5                     # сколько результатов искать/показывать
 
-    # ---- Retrieval ----
-    top_k: int = 1
-    batch_size_clips: int = 8
-    normalize_embeddings: bool = True
+    # -------- Batch run inputs/outputs --------
+    videos_dir: str = "./Videos"
+    batch_out_dir: str = "./batch_out"
+    clips_subdir: str = "clips"        # внутри batch_out_dir
 
-    # ---- Cache policy ----
-    force_reindex: bool = False
+    # -------- Query --------
+    query: str = "Vandalism"
+
+    # -------- Clip export (ffmpeg) --------
+    export_clips: bool = True
+    export_top_k: int = 5              # сколько сохранять клипов как видео
+    pad_sec: float = 2.0               # запас по краям (делает клипы длиннее)
+    reencode: bool = True              # True точнее, False быстрее
+
+    # -------- Cache --------
+    cache_results: bool = True
+    cache_index: bool = True
     strict_cache_match: bool = True
+    force_reindex: bool = False
 
-    # ---- Paths (все пути заданы явно и используются всеми функциями) ----
-    paths: CachePaths = field(default_factory=CachePaths)
-
-    # ---- IO ----
-    verbose: bool = True
+    # -------- NEW: save top-N times --------
+    save_top_n_times: int = 5          # сохранять start/end для top-N (0 = отключить)
