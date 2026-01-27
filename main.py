@@ -22,7 +22,7 @@ for i in count:
 delete_video(video_all, video, r"C:\Users\user\Documents\Prodjeeeect\all_func\video_split")
 
 for i in count:
-    if not person_detect(rf"C:\Users\user\Documents\Prodjeeeect\all_func\video_split\part_00{i}.mp4"):
+    if not person_detect(rf"C:\Users\user\Documents\Prodjeeeect\all_func\video_split\part_00{i}.mp4", 8):
         video.pop(i)
         count.pop(i)
 delete_video(video_all, video, r"C:\Users\user\Documents\Prodjeeeect\all_func\video_split")
