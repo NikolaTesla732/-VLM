@@ -6,7 +6,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 
-from video_io import read_frames
+from video_io import open_video
 
 
 def _fmt_time(t: Optional[float]) -> str:
@@ -21,24 +21,20 @@ def show_top_segments(
     *,
     max_frames_per_clip: Optional[int] = 200,
 ) -> None:
-    """
-    Показывает top-сегменты в ОКНЕ matplotlib (подходит для PyCharm / обычного запуска).
+    """Показывает top-сегменты в окне matplotlib.
 
-    Args:
-        video_path: путь к видео
-        results_list: список сегментов (dict) из retrieve_topk_segments
-        max_clips: сколько сегментов показывать
-        delay: задержка между кадрами, сек
-        max_frames_per_clip: ограничение на число кадров в сегменте (None = без лимита)
+    Оптимизация относительно старой версии:
+    - используем VideoSource (VideoReader открывается один раз)
     """
+
     num_to_show = min(len(results_list), max_clips)
     if num_to_show == 0:
         print("No segments to show.")
         return
 
-    # интерактивный режим — окно будет обновляться без блокировки
-    plt.ion()
+    vs = open_video(video_path)
 
+    plt.ion()
     fig, ax = plt.subplots()
     ax.axis("off")
 
@@ -68,7 +64,7 @@ def show_top_segments(
             step = max(1, len(frame_indices) // max_frames_per_clip)
             frame_indices = frame_indices[::step]
 
-        frames = read_frames(video_path, frame_indices)  # [T,H,W,3] uint8 RGB
+        frames = vs.get_frames(frame_indices)  # [T,H,W,3] uint8 RGB
 
         for f in frames:
             ax.clear()
@@ -76,9 +72,8 @@ def show_top_segments(
             ax.imshow(f)
 
             fig.canvas.draw_idle()
-            plt.pause(0.001)  # даём GUI обработать события
+            plt.pause(0.001)
             time.sleep(delay)
 
-    # оставляем окно открытым после завершения показа
     plt.ioff()
     plt.show()
