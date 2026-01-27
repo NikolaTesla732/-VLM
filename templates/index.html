@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Detective web</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.ico') }}">
+</head>
+<body>
+    <h2>Проишествие для обнаружения: </h2>
+    <label for="example_select">выберите вариант:</label>
+    <select id="example_select" name="example_select">
+        <option value="v1">Вариант 1</option>
+        <option value="v1">Вариант 2</option>
+        <option value="v1">Вариант 3</option>
+    </select>
+
+    <hr>
+
+    <h2>Область внимания</h2>
+    <p>Нужна ли?</p>
+
+    <label>
+        <input type="radio" name="agree" value="yes" checked>
+        Да
+    </label>
+
+    <label>
+        <input type="radio" name="agree" value="no">
+        Нет
+    </label>
+</body>
+</html>
