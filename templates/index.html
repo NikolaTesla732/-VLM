@@ -1,32 +1,74 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <title>Detective web</title>
-  <link rel="icon" href="{{ url_for('static', filename='logo.ico') }}">
+
+  <!-- Иконка вкладки (если файл есть в /static) -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='logo.ico') }}">
+
+  <!-- Стили -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
-    <h2>Проишествие для обнаружения: </h2>
-    <label for="example_select">выберите вариант:</label>
-    <select id="example_select" name="example_select">
-        <option value="v1">Вариант 1</option>
-        <option value="v1">Вариант 2</option>
-        <option value="v1">Вариант 3</option>
-    </select>
 
-    <hr>
 
-    <h2>Область внимания</h2>
-    <p>Нужна ли?</p>
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1 class="title">Detective Web</h1>
+        <p class="subtitle">Минималистичный интерфейс управления</p>
+      </div>
+    </header>
 
-    <label>
-        <input type="radio" name="agree" value="yes" checked>
-        Да
-    </label>
+    <section class="card">
+      <h2 class="card-title">Происшествие для обнаружения</h2>
+      <p class="card-hint">Выберите сценарий из списка (пример).</p>
 
-    <label>
-        <input type="radio" name="agree" value="no">
-        Нет
-    </label>
+      <label class="field">
+        <span class="field-label">Сценарий</span>
+        <select class="select" id="example_select" name="example_select">
+          <option value="fight">Драка</option>
+          <option value="fire">Пожар</option>
+          <option value="theft">Кража</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Область внимания (ROI)</h2>
+      <p class="card-hint">Нужна ли область внимания? (пример логического выбора)</p>
+
+      <div class="radio-group" role="radiogroup" aria-label="Нужна ли область внимания">
+        <label class="radio">
+          <input type="radio" name="roi_needed" value="yes" checked>
+          <span>Да</span>
+        </label>
+
+        <label class="radio">
+          <input type="radio" name="roi_needed" value="no">
+          <span>Нет</span>
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
+      <button class="btn" type="button" title="Пример кнопки (пока ничего не отправляет)">
+        Сохранить (пример)
+      </button>
+      <p class="footer-note">
+        Пока это просто интерфейс. Если хочешь — подключим отправку выбора в Flask (POST) и обработку в Python.
+      </p>
+    </section>
+
+    <footer class="footer">
+      <span>Локально: 127.0.0.1</span>
+      <span class="dot">•</span>
+      <span>Версия: MVP</span>
+    </footer>
+  </main>
 </body>
 </html>
