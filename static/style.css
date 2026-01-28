@@ -1,12 +1,12 @@
 :root{
-  --bg: #f5f7fb;
-  --card: #ffffff;
-  --text: #0f172a;
-  --muted: #5b6475;
-  --line: rgba(15, 23, 42, 0.10);
+  --bg: #0b1020;                 /* фон страницы */
+  --card: rgba(255,255,255,0.06);/* фон карточек */
+  --text: #e7eaf3;               /* основной текст */
+  --muted: rgba(231,234,243,0.70);/* вторичный текст */
+  --line: rgba(231,234,243,0.10); /* границы */
 
-  --accent: #3b82f6;
-  --accent-soft: rgba(59, 130, 246, 0.12);
+  --accent: #7aa2ff;             /* акцент */
+  --accent-soft: rgba(122,162,255,0.20);
 
   --radius: 16px;
 }
@@ -21,9 +21,10 @@ html, body {
 body{
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif;
   color: var(--text);
-  background: radial-gradient(1200px 600px at 15% 10%, #eef4ff 0%, transparent 60%),
-              radial-gradient(900px 500px at 85% 20%, #f1fff8 0%, transparent 55%),
-              var(--bg);
+  background:
+    radial-gradient(900px 500px at 15% 10%, rgba(122,162,255,0.18) 0%, transparent 60%),
+    radial-gradient(900px 500px at 85% 20%, rgba(84,214,167,0.12) 0%, transparent 55%),
+    var(--bg);
 }
 
 .page{
@@ -97,29 +98,50 @@ body{
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
-.radio-group{
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
+/* карточки выбора Да/Нет */
 .radio{
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 999px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   user-select: none;
+
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
+/* лёгкая подсветка при наведении */
+.radio:hover{
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.16);
+  transform: translateY(-1px);
+}
+
+/* радиокнопка внутри */
 .radio input{
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
 }
+
+/* ВЫБРАНО: подсветка контейнера, если input отмечен */
+.radio:has(input:checked){
+  border-color: rgba(59, 130, 246, 0.60);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 30px rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 1);
+}
+
+/* текст "Да/Нет" */
+.radio span{
+  font-weight: 600;
+  color: var(--text);
+}
+
 
 .divider{
   height: 1px;
@@ -166,4 +188,253 @@ body{
   width: 22px;
   height: 22px;
   border-radius: 6px;
+}
+
+.input-wrap{
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* иконка слева внутри поля */
+.input-icon{
+  position: absolute;
+  left: 12px;
+  font-size: 14px;
+  color: var(--muted);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* красивый инпут */
+.input--pretty{
+  width: 100%;
+  padding: 11px 12px 11px 36px; /* слева больше места под иконку */
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+/* лёгкий hover */
+.input--pretty:hover{
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+/* фокус: мягкое свечение */
+.input--pretty:focus{
+  border-color: rgba(59, 130, 246, 0.60);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 30px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+/* красивый placeholder */
+.input--pretty::placeholder{
+  color: rgba(91, 100, 117, 0.75);
+}
+
+/* текст подсказки под полем */
+.field-help{
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.file-wrap{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.file-wrap:hover{
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.16);
+  transform: translateY(-1px);
+}
+
+.file-wrap:focus-within{
+  border-color: rgba(59, 130, 246, 0.60);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+/* скрываем настоящий input, кликаем по label-кнопке */
+.file-input{
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.file-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.file-btn:hover{
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.file-btn:active{
+  transform: translateY(0px);
+}
+
+/* текст справа с именем файла */
+.file-name{
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.file-btn.is-disabled{
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: rgba(15, 23, 42, 0.10);
+}
+
+/* состояние: файл выбран */
+.file-btn.is-selected{
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* -------------------- Dark theme finishing (override) -------------------- */
+
+/* Чуть более "правильные" тени для тёмного фона */
+.card{
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(8px);
+}
+
+/* Общие "поверхности" (инпуты/плашки) */
+.select,
+.input--pretty,
+.file-wrap,
+.radio{
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text);
+}
+
+/* Hover: чуть светлее */
+.select:hover,
+.input--pretty:hover,
+.file-wrap:hover,
+.radio:hover{
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(231, 234, 243, 0.16) !important;
+  transform: translateY(-1px);
+}
+
+/* Focus: единый стиль подсветки */
+.select:focus,
+.input--pretty:focus{
+  border-color: rgba(122, 162, 255, 0.65) !important;
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 16px 44px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Focus для file-wrap (когда внутри выбран input) */
+.file-wrap:focus-within{
+  border-color: rgba(122, 162, 255, 0.65) !important;
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 16px 44px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Placeholder в тёмной теме */
+.input--pretty::placeholder{
+  color: rgba(231, 234, 243, 0.55);
+}
+
+/* Кнопки выбора файла */
+.file-btn{
+  background: rgba(255, 255, 255, 0.10) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  box-shadow: none;
+}
+
+.file-btn:hover{
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(231, 234, 243, 0.18) !important;
+}
+
+.file-btn.is-selected{
+  border-color: rgba(122, 162, 255, 0.45) !important;
+  background: rgba(122, 162, 255, 0.16) !important;
+}
+
+/* Кнопка (основная) — слегка "стеклянная", но акцентная */
+.btn{
+  background: linear-gradient(180deg, rgba(122, 162, 255, 0.95), rgba(122, 162, 255, 0.78));
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.35);
+}
+
+.btn:hover{
+  filter: brightness(1.02);
+}
+
+/* Радио: выбранное состояние — тёмное, но с акцентом */
+.radio:has(input:checked){
+  background: rgba(122, 162, 255, 0.12) !important;
+  border-color: rgba(122, 162, 255, 0.55) !important;
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 16px 44px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Мелкие тексты/иконки */
+.input-icon{
+  color: rgba(231, 234, 243, 0.70);
+}
+
+.file-name,
+.field-help,
+.subtitle,
+.card-hint,
+.footer{
+  color: var(--muted);
+}
+
+/* Лого — чуть “стеклянное” на тёмном */
+.brand-logo{
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Divider в тёмной теме */
+.divider{
+  background: rgba(231, 234, 243, 0.10);
+}
+
+/* Чтобы transform hover не "дёргал" layout на мобильных */
+.select,
+.input--pretty,
+.file-wrap,
+.radio,
+.file-btn{
+  will-change: transform;
 }

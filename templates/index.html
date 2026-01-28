@@ -13,6 +13,10 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+
+
 <body>
 
 
@@ -20,27 +24,54 @@
     <header class="header">
       <div>
         <h1 class="title">Detective Web</h1>
-        <p class="subtitle">Минималистичный интерфейс управления</p>
+        <p class="subtitle">Мы покажем все нарушения по вашему запросу</p>
       </div>
     </header>
 
     <section class="card">
-      <h2 class="card-title">Происшествие для обнаружения</h2>
-      <p class="card-hint">Выберите сценарий из списка (пример).</p>
+      <h2 class="card-title">Файл для обработки</h2>
+      <p class="card-hint">Выберите видеофайл</p>
 
       <label class="field">
-        <span class="field-label">Сценарий</span>
-        <select class="select" id="example_select" name="example_select">
-          <option value="fight">Драка</option>
-          <option value="fire">Пожар</option>
-          <option value="theft">Кража</option>
-        </select>
+        <span class="field-label">Выбор файла</span>
+
+    <div class="file-wrap">
+      <input class="file-input" type="file" id="video_file" name="video_file" accept="video/*">
+      <label class="file-btn" id="file_btn" for="video_file">Выбрать файл</label>
+      <span class="file-name" id="file_name">Файл не выбран</span>
+    </div>
+
+    <span class="field-help">Поддерживаются форматы: mp4, avi, mkv и др.</span>
+    </label>
+    </section>
+
+
+
+    <section class="card">
+      <h2 class="card-title">Происшествие для обнаружения</h2>
+      <p class="card-hint">Напишите какие пришествие вы хотите обнаружить (в двух словах):</p>
+
+      <label class="field">
+        <span class="field-label">Происшествие</span>
+
+        <div class="input-wrap">
+          <span class="input-icon" aria-hidden="true">⌕</span>
+          <input
+            class="input input--pretty"
+            type="text"
+            id="example_input"
+            name="example_input"
+            placeholder="Что ищем?"
+            autocomplete="off"
+          >
+        </div>
+
       </label>
     </section>
 
     <section class="card">
-      <h2 class="card-title">Область внимания (ROI)</h2>
-      <p class="card-hint">Нужна ли область внимания? (пример логического выбора)</p>
+      <h2 class="card-title">Нужна ли область внимания?</h2>
+      <p class="card-hint"> </p>
 
       <div class="radio-group" role="radiogroup" aria-label="Нужна ли область внимания">
         <label class="radio">
@@ -70,5 +101,7 @@
       <span>Версия: MVP</span>
     </footer>
   </main>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
