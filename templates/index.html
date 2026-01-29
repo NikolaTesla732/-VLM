@@ -14,18 +14,21 @@
 </head>
 
 
-<script src="{{ url_for('static', filename='app.js') }}"></script>
-
-
 <body>
 
 
   <main class="page">
     <header class="header">
-      <div>
-        <h1 class="title">Detective Web</h1>
-        <p class="subtitle">Мы покажем все нарушения по вашему запросу</p>
-      </div>
+<header class="header">
+  <div class="brand">
+    <img class="brand-logo" src="{{ url_for('static', filename='logo2.ico') }}" alt="Logo">
+    <div class="brand-text">
+      <h1 class="title">Detective Web</h1>
+      <p class="subtitle">Мы покажем все нарушения по вашему запросу</p>
+    </div>
+  </div>
+</header>
+
     </header>
 
     <section class="card">
@@ -70,29 +73,14 @@
     </section>
 
     <section class="card">
-      <h2 class="card-title">Нужна ли область внимания?</h2>
-      <p class="card-hint"> </p>
-
-      <div class="radio-group" role="radiogroup" aria-label="Нужна ли область внимания">
-        <label class="radio">
-          <input type="radio" name="roi_needed" value="yes" checked>
-          <span>Да</span>
-        </label>
-
-        <label class="radio">
-          <input type="radio" name="roi_needed" value="no">
-          <span>Нет</span>
-        </label>
-      </div>
-
-      <div class="divider"></div>
-
-      <button class="btn" type="button" title="Пример кнопки (пока ничего не отправляет)">
-        Сохранить (пример)
-      </button>
+    <h2 class="card-title">Важная кнопочка!</h2>
       <p class="footer-note">
-        Пока это просто интерфейс. Если хочешь — подключим отправку выбора в Flask (POST) и обработку в Python.
+        Нажмите, и получите видео с отмеченными местами, где происходят нарушения.
       </p>
+      <button class="btn" type="button" title="Пример кнопки (пока ничего не отправляет)">
+        Применить
+      </button>
+
     </section>
 
     <footer class="footer">

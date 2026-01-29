@@ -115,33 +115,6 @@ body{
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
-/* лёгкая подсветка при наведении */
-.radio:hover{
-  background: #ffffff;
-  border-color: rgba(15, 23, 42, 0.16);
-  transform: translateY(-1px);
-}
-
-/* радиокнопка внутри */
-.radio input{
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-}
-
-/* ВЫБРАНО: подсветка контейнера, если input отмечен */
-.radio:has(input:checked){
-  border-color: rgba(59, 130, 246, 0.60);
-  box-shadow: 0 0 0 4px var(--accent-soft), 0 12px 30px rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 1);
-}
-
-/* текст "Да/Нет" */
-.radio span{
-  font-weight: 600;
-  color: var(--text);
-}
-
 
 .divider{
   height: 1px;
@@ -160,6 +133,7 @@ body{
   color: #fff;
   cursor: pointer;
   font-weight: 600;
+  margin-top: 12px;
 }
 
 .btn:hover{
@@ -335,8 +309,7 @@ body{
 /* Общие "поверхности" (инпуты/плашки) */
 .select,
 .input--pretty,
-.file-wrap,
-.radio{
+.file-wrap{
   background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid var(--line) !important;
   color: var(--text);
@@ -345,8 +318,7 @@ body{
 /* Hover: чуть светлее */
 .select:hover,
 .input--pretty:hover,
-.file-wrap:hover,
-.radio:hover{
+.file-wrap:hover{
   background: rgba(255, 255, 255, 0.08) !important;
   border-color: rgba(231, 234, 243, 0.16) !important;
   transform: translateY(-1px);
@@ -437,4 +409,20 @@ body{
 .radio,
 .file-btn{
   will-change: transform;
+}
+
+.brand{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-text{
+  display: grid;
+  gap: 2px;
+}
+
+.brand-logo{
+    height: 10%;
+    width: 10%;
 }
