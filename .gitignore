@@ -1,6 +1,7 @@
 # created by virtualenv automatically
 workspace.xml
 *.mp4
+*.zip
 Videos/
 cache/
 batch_out/
