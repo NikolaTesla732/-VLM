@@ -5,6 +5,8 @@ import uuid
 import socket
 import threading
 import webbrowser
+import atexit
+import signal
 from flask import Flask, render_template, request
 
 
@@ -52,6 +54,34 @@ app = Flask(
 UPLOAD_DIR = os.path.join(runtime_dir(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# --- Очистка uploads при закрытии приложения ---
+_CREATED_UPLOADS = set()
+
+
+def cleanup_uploads() -> None:
+    for path in list(_CREATED_UPLOADS):
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except Exception:
+            pass
+
+
+atexit.register(cleanup_uploads)
+
+
+def _handle_exit(signum, frame):
+    cleanup_uploads()
+    raise SystemExit
+
+
+signal.signal(signal.SIGINT, _handle_exit)
+try:
+    signal.signal(signal.SIGTERM, _handle_exit)
+except Exception:
+    pass
+# ---------------------------------------------
+
 
 @app.get("/")
 def index():
@@ -70,8 +100,9 @@ def run():
     safe_name = f"{uuid.uuid4().hex}{ext}"
     save_path = os.path.join(UPLOAD_DIR, safe_name)
     file.save(save_path)
+    _CREATED_UPLOADS.add(save_path)
 
-    # TODO: ВСТАВЬ СВОЙ КОД ОБРАБОТКИ ВОТ ЗДЕСЬ
+    # ВСТАВЬ СВОЙ КОД ОБРАБОТКИ ВОТ ЗДЕСЬ
     # process_video(save_path, query_text=query_text)
 
     return f"Ок! Сохранено: {safe_name}. Текст: {query_text or '(пусто)'}"
