@@ -426,3 +426,104 @@ body{
     height: 10%;
     width: 10%;
 }
+
+/* --- секции полей --- */
+.field-section{
+  margin-top: 18px;
+}
+
+.field-title{
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.field-subtitle{
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* --- акцент на полях + hover подсветка --- */
+.file-wrap,
+.input--pretty{
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(231,234,243,0.14) !important;
+  box-shadow: 0 14px 38px rgba(0,0,0,0.35) !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+/* hover: подсветка как раньше */
+.file-wrap:hover,
+.input--pretty:hover{
+  background: rgba(255,255,255,0.09) !important;
+  border-color: rgba(122,162,255,0.45) !important;
+  box-shadow: 0 0 0 4px rgba(122,162,255,0.14), 0 18px 50px rgba(0,0,0,0.45) !important;
+  transform: translateY(-1px);
+}
+
+/* focus: ещё сильнее */
+.file-wrap:focus-within,
+.input--pretty:focus{
+  border-color: rgba(122,162,255,0.75) !important;
+  box-shadow: 0 0 0 5px rgba(122,162,255,0.22), 0 18px 50px rgba(0,0,0,0.45) !important;
+  transform: translateY(-1px);
+}
+
+/* кнопка ниже секций */
+.btn-gap{
+  margin-top: 18px;
+}
+
+.field-section .btn-gap{
+  margin-top: 8px;
+}
+
+/* --- Detective Web: красивый hover для основной кнопки --- */
+.btn{
+  position: relative;
+  overflow: hidden;
+  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+/* внутренний "блик" */
+.btn::before{
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.35), transparent 55%);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+}
+
+.btn:hover{
+  transform: translateY(-1px);
+  filter: brightness(1.06) saturate(1.05);
+  box-shadow:
+    0 0 0 5px rgba(122,162,255,0.22),
+    0 22px 60px rgba(0,0,0,0.45);
+}
+
+.btn:hover::before{
+  opacity: 0.55;
+  transform: translateY(0);
+}
+
+.btn:active{
+  transform: translateY(0);
+  filter: brightness(1.02);
+  box-shadow:
+    0 0 0 4px rgba(122,162,255,0.18),
+    0 16px 46px rgba(0,0,0,0.35);
+}
+
+.btn:focus-visible{
+  outline: none;
+  box-shadow:
+    0 0 0 5px rgba(122,162,255,0.28),
+    0 22px 60px rgba(0,0,0,0.45);
+}
