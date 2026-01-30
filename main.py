@@ -1,10 +1,10 @@
 import os
 import sys
 import time
-import uuid
 import socket
 import threading
 import webbrowser
+import tempfile
 import atexit
 import signal
 from flask import Flask, render_template, request
@@ -17,7 +17,7 @@ def is_frozen() -> bool:
 
 def runtime_dir() -> str:
     """
-    Где хранить логи/загрузки:
+    Где хранить данные/ресурсы:
     - .py: рядом с main.py
     - .exe: рядом с main.exe
     """
@@ -26,8 +26,8 @@ def runtime_dir() -> str:
 
 def resource_dir(name: str) -> str:
     """
-    Где искать папки templates/static:
-    1) рядом с exe/скриптом (можно менять без пересборки, если файлы лежат рядом)
+    Где искать templates/static:
+    1) рядом с exe/скриптом (можно менять без пересборки)
     2) внутри PyInstaller onefile (_MEIPASS)
     """
     local = os.path.join(runtime_dir(), name)
@@ -51,27 +51,24 @@ app = Flask(
     static_folder=resource_dir("static"),
 )
 
-UPLOAD_DIR = os.path.join(runtime_dir(), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# --- Очистка uploads при закрытии приложения ---
-_CREATED_UPLOADS = set()
+# --- TEMP: сохраняем загруженные видео во временную папку ОС и чистим при закрытии ---
+_TEMP_FILES = set()
 
 
-def cleanup_uploads() -> None:
-    for path in list(_CREATED_UPLOADS):
+def cleanup_temp_files() -> None:
+    for p in list(_TEMP_FILES):
         try:
-            if os.path.isfile(path):
-                os.remove(path)
+            if os.path.isfile(p):
+                os.remove(p)
         except Exception:
             pass
 
 
-atexit.register(cleanup_uploads)
+atexit.register(cleanup_temp_files)
 
 
 def _handle_exit(signum, frame):
-    cleanup_uploads()
+    cleanup_temp_files()
     raise SystemExit
 
 
@@ -80,7 +77,7 @@ try:
     signal.signal(signal.SIGTERM, _handle_exit)
 except Exception:
     pass
-# ---------------------------------------------
+# -------------------------------------------------------------------------------
 
 
 @app.get("/")
@@ -96,20 +93,24 @@ def run():
     if not file or not file.filename:
         return "Файл не выбран", 400
 
+    # расширение, чтобы обработчики (opencv/ffmpeg) нормально определяли формат
     ext = os.path.splitext(file.filename)[1].lower() or ".mp4"
-    safe_name = f"{uuid.uuid4().hex}{ext}"
-    save_path = os.path.join(UPLOAD_DIR, safe_name)
-    file.save(save_path)
-    _CREATED_UPLOADS.add(save_path)
 
-    # ВСТАВЬ СВОЙ КОД ОБРАБОТКИ ВОТ ЗДЕСЬ
-    # process_video(save_path, query_text=query_text)
+    # создаём временный файл и получаем путь
+    fd, temp_path = tempfile.mkstemp(prefix="detective_", suffix=ext)
+    os.close(fd)  # важно закрыть дескриптор на Windows
 
-    return f"Ок! Сохранено: {safe_name}. Текст: {query_text or '(пусто)'}"
+    # сохраняем загруженное видео в temp
+    file.save(temp_path)
+    _TEMP_FILES.add(temp_path)
+
+    # --- ТУТ ТВОЯ ОБРАБОТКА ---
+    # process_video(temp_path, query_text=query_text)
+
+    return f"Ок! Временный файл сохранён: {os.path.basename(temp_path)}. Запрос: {query_text or '(пусто)'}"
 
 
 def open_browser_later(url: str) -> None:
-    """Небольшая задержка, чтобы сервер успел подняться, и открываем браузер."""
     time.sleep(0.7)
     webbrowser.open(url, new=1)
 
