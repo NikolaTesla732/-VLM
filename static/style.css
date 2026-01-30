@@ -613,3 +613,156 @@ a.btn{
   font-size: 15px;
   line-height: 1.45;
 }
+
+/* -------------------- Result page UI -------------------- */
+
+.result-card{
+  text-align: left;
+}
+
+.tc-list{
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.tc-item{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(231,234,243,0.12);
+  background: rgba(255,255,255,0.05);
+  box-shadow: 0 14px 38px rgba(0,0,0,0.30);
+}
+
+.tc-btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 0;
+}
+
+.tc-time{
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: rgba(231,234,243,0.95);
+}
+
+.tc-jump{
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.tc-btn:hover .tc-jump{
+  opacity: 1;
+}
+
+.video-wrap{
+  margin-top: 10px;
+}
+
+.result-video{
+  width: 100%;
+  display: block;
+  border-radius: 18px;
+  border: 1px solid rgba(231,234,243,0.12);
+  background: rgba(0,0,0,0.35);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+}
+
+/* Timeline */
+.timeline{
+  margin-top: 12px;
+}
+
+.timeline-track{
+  position: relative;
+  padding-top: 10px;
+}
+
+.timeline-range{
+  width: 100%;
+  appearance: none;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(231,234,243,0.12);
+  box-shadow: 0 14px 38px rgba(0,0,0,0.28);
+  outline: none;
+}
+
+.timeline-range::-webkit-slider-thumb{
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(122,162,255,0.95);
+  box-shadow:
+    0 0 0 5px rgba(122,162,255,0.18),
+    0 18px 46px rgba(0,0,0,0.35);
+  border: 1px solid rgba(231,234,243,0.12);
+}
+
+.timeline-range::-moz-range-thumb{
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(122,162,255,0.95);
+  border: 1px solid rgba(231,234,243,0.12);
+}
+
+.timeline-markers{
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 9px;
+  height: 14px;
+}
+
+.timeline-marker{
+  pointer-events: auto;
+  position: absolute;
+  top: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(84,214,167,0.95);
+  box-shadow: 0 0 0 5px rgba(84,214,167,0.14);
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+.timeline-marker:hover{
+  box-shadow: 0 0 0 6px rgba(84,214,167,0.22);
+}
+
+.timeline-meta{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: rgba(231,234,243,0.72);
+  font-size: 13px;
+}
+
+.result-actions{
+  margin-top: 14px;
+}
+
+html, body { overflow-x: hidden; }
+
+.timeline-track{
+  overflow: hidden; /* прячет то, что вылезает за края (метки/тени) */
+}

@@ -5,22 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Результат</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='logo2.ico') }}">
+
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body>
-  <main class="page" data-page="result" data-status="{{ job.status }}">
-    <div class="card">
+  <main
+    class="page"
+    data-page="result"
+    data-status="{{ job.status }}"
+    data-job-id="{{ job_id }}"
+    data-markers='{{ (job.timestamps or []) | tojson }}'
+  >
+    <div class="card result-card">
       {% if job.status == "done" %}
-        <h2 class="card-title">Готово ✅</h2>
-        <p class="card-hint">{{ job.result }}</p>
-      {% else %}
+        <h2 class="card-title">Результаты анализа</h2>
+
+        <p class="card-hint">Найденные моменты (кликни, чтобы перейти):</p>
+
+        <ul class="tc-list" id="tc_list"></ul>
+
+        <div class="video-wrap">
+          <video
+            id="result_video"
+            class="result-video"
+            controls
+            preload="metadata"
+            src="{{ url_for('video', job_id=job_id) }}"
+          ></video>
+        </div>
+
+        <div class="timeline" id="timeline">
+          <div class="timeline-track">
+            <input class="timeline-range" id="video_seek" type="range" min="0" max="1000" value="0" step="1">
+            <div class="timeline-markers" id="timeline_markers"></div>
+          </div>
+
+          <div class="timeline-meta">
+            <span id="cur_time">0:00</span>
+            <span class="dot">•</span>
+            <span id="dur_time">0:00</span>
+          </div>
+
+          <p class="footer-note">Можно тянуть ползунок или кликать по меткам таймкодов.</p>
+        </div>
+
+      {% elif job.status == "error" %}
         <h2 class="card-title">Ошибка ❌</h2>
         <p class="card-hint">{{ job.error }}</p>
+
+      {% else %}
+        <h2 class="card-title">Ещё обрабатывается…</h2>
+        <p class="card-hint">Вернись на страницу ожидания.</p>
       {% endif %}
 
-      <a class="btn" href="/">На главную</a>
+      <div class="result-actions">
+        <a class="btn" href="/">На главную</a>
+      </div>
     </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
   </main>
 </body>
 </html>
