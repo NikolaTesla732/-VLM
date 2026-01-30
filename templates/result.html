@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Результат</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='logo2.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <main class="page" data-page="result" data-status="{{ job.status }}">
+    <div class="card">
+      {% if job.status == "done" %}
+        <h2 class="card-title">Готово ✅</h2>
+        <p class="card-hint">{{ job.result }}</p>
+      {% else %}
+        <h2 class="card-title">Ошибка ❌</h2>
+        <p class="card-hint">{{ job.error }}</p>
+      {% endif %}
+
+      <a class="btn" href="/">На главную</a>
+    </div>
+  </main>
+</body>
+</html>

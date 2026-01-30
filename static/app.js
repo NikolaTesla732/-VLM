@@ -26,3 +26,39 @@ document.addEventListener("DOMContentLoaded", () => {
   input.addEventListener("change", updateUI);
   updateUI();
 });
+
+async function pollJobStatus(jobId) {
+  const statusEl = document.getElementById("status_text");
+
+  async function tick() {
+    try {
+      const r = await fetch(`/api/status/${jobId}`, { cache: "no-store" });
+      if (!r.ok) throw new Error("bad response");
+
+      const data = await r.json();
+
+      if (data.status === "done" || data.status === "error") {
+        window.location.href = `/result/${jobId}`;
+        return;
+      }
+
+      if (statusEl) statusEl.textContent = "Статус: выполняется…";
+    } catch (e) {
+      if (statusEl) statusEl.textContent = "Статус: нет связи, повтор…";
+    }
+
+    setTimeout(tick, 1000);
+  }
+
+  tick();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const page = document.querySelector("[data-page='processing']");
+  if (!page) return;
+
+  const jobId = page.getAttribute("data-job-id");
+  if (!jobId) return;
+
+  pollJobStatus(jobId);
+});
