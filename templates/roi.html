@@ -13,7 +13,9 @@
   <main class="page" data-page="roi" data-job-id="{{ job_id }}">
     <div class="card">
       <h2 class="card-title">Выбор области (ROI)</h2>
-      <p class="card-hint">Выдели прямоугольник на видео (можно двигать и менять размер) и нажми «Подтвердить».</p>
+      <p class="card-hint">
+        Выдели прямоугольник на видео (можно двигать и менять размер) и нажми «Подтвердить».
+      </p>
 
       <div class="roi-wrap" id="roi_wrap">
         <video
@@ -34,7 +36,6 @@
 
         <!-- прямоугольник ROI -->
         <div id="roi_box" class="roi-box" role="application" aria-label="ROI selection">
-          <!-- 8 ручек (углы + стороны) -->
           <div class="roi-handle nw" data-h="nw"></div>
           <div class="roi-handle n"  data-h="n"></div>
           <div class="roi-handle ne" data-h="ne"></div>
@@ -48,17 +49,21 @@
         </div>
       </div>
 
-      <form id="roi_form" method="post" action="/roi/{{ job_id }}">
+      <form id="roi_form" class="roi-form" method="post" action="/roi/{{ job_id }}">
         <input type="hidden" name="x" id="roi_x">
         <input type="hidden" name="y" id="roi_y">
         <input type="hidden" name="w" id="roi_w">
         <input type="hidden" name="h" id="roi_h">
 
-        <button class="btn btn-gap" type="submit">Подтвердить область</button>
-        <a class="btn" href="/">Отмена</a>
+        <div class="roi-actions">
+          <button class="btn roi-btn" type="submit">Подтвердить область</button>
+          <a class="btn roi-btn roi-btn--ghost" href="/">Отмена</a>
+        </div>
       </form>
 
-      <p class="footer-note">Совет: поставь видео на паузу, выбери область, затем подтверждай.</p>
+      <p class="footer-note">
+        Совет: поставь видео на паузу, выбери область, затем подтверждай.
+      </p>
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>

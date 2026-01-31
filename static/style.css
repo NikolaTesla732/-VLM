@@ -858,3 +858,57 @@ html, body { overflow-x: hidden; }
 .roi-handle.s{ left:50%; bottom:-7px; transform:translateX(-50%); cursor:ns-resize; }
 .roi-handle.w{ left:-7px; top:50%; transform:translateY(-50%); cursor:ew-resize; }
 .roi-handle.e{ right:-7px; top:50%; transform:translateY(-50%); cursor:ew-resize; }
+
+/* ROI: кнопки в один ряд, одинаковая высота и выравнивание */
+#roi_form {
+  display: flex;
+  gap: 12px;
+  align-items: center; /* чтобы были на одном уровне */
+}
+
+/* одинаковые размеры/центрирование для <a> и <button> */
+#roi_form .btn,
+#roi_form button.btn,
+#roi_form a.btn {
+  height: 44px;            /* можешь поставить 46px как нравится */
+  padding: 0 18px;         /* ширина остаётся "как была" за счёт текста */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;          /* убираем разные line-height */
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+/* если где-то есть btn-gap, чтобы он не ломал высоту */
+#roi_form .btn.btn-gap {
+  margin-top: 0;
+}
+
+/* ROI: кнопки в один ряд, одинаковая высота/уровень */
+.roi-actions{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.roi-btn{
+  height: 44px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
+  text-decoration: none; /* для <a> */
+}
+
+/* опционально: чуть "тише" кнопка отмены (если у тебя есть стили) */
+.roi-btn--ghost{
+  opacity: .9;
+}
+.roi-btn--ghost:hover{
+  opacity: 1;
+}
+
