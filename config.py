@@ -10,7 +10,7 @@ from typing import Optional, Sequence, Tuple
 class RunArgs:
     mode: str = "batch"
     video: str = "video_split"
-    query: str = "Vandalism"
+    query: str = "Человак совершает вандализм"
     show: bool = True
 
 
@@ -71,7 +71,7 @@ class PersonDetectConfig:
 @dataclass
 class PreprocessConfig:
     enabled: bool = True
-    input_root_dir: str = "Videos/Vandalism/Z"
+    input_root_dir: str = "Videos/Vandalism/X"
     splits_root_dir: str = "video_split"
     manifest_name: str = "segments_manifest.json"
     clear_out_dir: bool = True

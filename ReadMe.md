@@ -1,4 +1,4 @@
-# 🕵️ Сыщик норм — Video Retrieval (XCLIP)
+# 🕵️ Сыщик норм — Video Retrieval 
 
 Проект для **поиска “интересных” моментов в видео** и **ранжирования фрагментов по текстовому запросу** (*text → video retrieval*).
 
@@ -189,3 +189,15 @@ pip install opencv-python
 ```bash
 python main.py --mode batch --video video_split --query "Vandalism"
 ```
+
+---
+
+## 📜 Attribution (RU→EN переводчик)
+
+Для перевода русских запросов в английский (перед CLIP/XCLIP retrieval) используется open‑source модель машинного перевода:
+
+- **Модель:** `Helsinki-NLP/opus-mt-ru-en` (OPUS‑MT / MarianMT)
+- **Авторы (recommended citation):** Jörg Tiedemann & Santhosh Thottingal — *“OPUS‑MT — Building open translation services for the World”*, EAMT 2020
+- **Лицензия модели:** **CC‑BY 4.0** (требует указания авторства)
+
+Источник/карточка модели: Hugging Face `Helsinki-NLP/opus-mt-ru-en`.

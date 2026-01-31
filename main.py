@@ -2,11 +2,25 @@
 from __future__ import annotations
 
 import glob
+from translate import translate_ru_to_en
 import json
 import os
 import time
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
+import warnings
+
+import re
+# Disable HuggingFace symlinks warning on Windows
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# Optional: hide other HF/Transformers warnings (можно убрать если не нужно)
+warnings.filterwarnings("ignore", message="Recommended: pip install sacremoses.*")
+warnings.filterwarnings("ignore", message="Xet Storage is enabled for this repo.*")
+_CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
+
+def has_cyrillic(text: str) -> bool:
+    return bool(_CYRILLIC_RE.search(text or ""))
 
 import cv2
 
@@ -253,14 +267,25 @@ def main() -> None:
 
             elapsed = time.perf_counter() - t0
             print(f"\n[Preprocess batch] done in {fmt_hms(elapsed)}")
-
         splits_root = str(getattr(pp, "splits_root_dir", run.video)) if pp is not None else run.video
-        batch_run.run_batch(videos_dir=splits_root, query=run.query, cfg=cfg)
+        query_batch = run.query
+        if has_cyrillic(query_batch):
+            query_en = translate_ru_to_en(query_batch)
+            if query_en and query_en != query_batch:
+                print(f"[Translate] RU -> EN: {query_batch!r} -> {query_en!r}")
+            query_batch = query_en
+        batch_run.run_batch(videos_dir=splits_root, query=query_batch, cfg=cfg)
         return
-
     video_path = run.video
     query = run.query
     show = bool(run.show)
+
+    # Auto-translate Russian queries to English for better CLIP/XCLIP retrieval quality
+    if has_cyrillic(query):
+        query_en = translate_ru_to_en(query)
+        if query_en and query_en != query:
+            print(f"[Translate] RU -> EN: {query!r} -> {query_en!r}")
+        query = query_en
 
     if not video_path or not os.path.exists(video_path):
         raise ValueError(f"--video не задан или файл не найден: {video_path}")
