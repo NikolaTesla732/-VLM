@@ -10,39 +10,20 @@ import atexit
 import signal
 import mimetypes
 
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    jsonify,
-    send_file,
-)
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 
+from split_video import split_video_web
 
-# -------------------- helpers --------------------
 
 def is_frozen() -> bool:
-    """True, если запущено как PyInstaller exe."""
     return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
 def runtime_dir() -> str:
-    """
-    Где хранить данные/ресурсы:
-    - .py: рядом с main.py
-    - .exe: рядом с main.exe
-    """
     return os.path.dirname(sys.executable) if is_frozen() else os.path.dirname(os.path.abspath(__file__))
 
 
 def resource_dir(name: str) -> str:
-    """
-    Где искать папки templates/static:
-    1) рядом с exe/скриптом (можно менять без пересборки)
-    2) внутри PyInstaller onefile (_MEIPASS)
-    """
     local = os.path.join(runtime_dir(), name)
     if os.path.isdir(local):
         return local
@@ -51,13 +32,10 @@ def resource_dir(name: str) -> str:
 
 
 def find_free_port(host: str = "127.0.0.1") -> int:
-    """Берём свободный порт, чтобы не падать, если 5000 занят."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, 0))
         return s.getsockname()[1]
 
-
-# -------------------- app --------------------
 
 app = Flask(
     __name__,
@@ -65,16 +43,10 @@ app = Flask(
     static_folder=resource_dir("static"),
 )
 
-# job_id -> {
-#   "status": "processing|done|error",
-#   "result": str,
-#   "error": str,
-#   "temp_path": str,
-#   "timestamps": list[float],  # секунды
-# }
+# job_id -> dict
 JOBS: dict[str, dict] = {}
 
-# TEMP: сохраняем загруженные видео во временную папку ОС и чистим при закрытии
+# temp files cleanup
 _TEMP_FILES: set[str] = set()
 
 
@@ -102,36 +74,40 @@ except Exception:
     pass
 
 
-# -------------------- video processing --------------------
+# -------------------- PROCESSING --------------------
 
-def process_job(job_id: str, temp_path: str, query_text: str) -> None:
+def process_job(job_id: str) -> None:
     """
-    Фоновая обработка видео.
+    Тут запускается обработка уже ПОСЛЕ того как пользователь выбрал ROI.
+    """
+    job = JOBS.get(job_id)
+    if not job:
+        return
 
-    ВАЖНО:
-    - Сюда вставь свою реальную обработку.
-    - Заполняй JOBS[job_id]["timestamps"] списком секунд [12.5, 38, 76.2]
-    """
     try:
-        # ====== ТУТ ТВОЯ ОБРАБОТКА ======
-        # Пример:
-        # timestamps = process_video(temp_path, query_text=query_text)
-        # JOBS[job_id]["timestamps"] = timestamps
-        # JOBS[job_id]["result"] = "Найдены моменты нарушения"
+        temp_path = job["temp_path"]
+        roi = job["roi"]            # (x,y,w,h) в пикселях
+        query_text = job["query_text"]
 
-        # Заглушка для проверки интерфейса:
-        time.sleep(4)
-        JOBS[job_id]["timestamps"] = [12.5, 38.0, 76.2]
-        JOBS[job_id]["result"] = f"Готово. Запрос: {query_text or '(пусто)'}"
+        # ==== ПРИМЕР: тут вставь твою реальную логику ====
+        # out_dir = os.path.join(runtime_dir(), "video_split_out", job_id)
+        # segments = split_video_web(temp_path, out_dir, 10.0, roi=roi)
+        # job["segments"] = segments
 
-        JOBS[job_id]["status"] = "done"
+        # Заглушка (проверка интерфейса):
+        time.sleep(2)
+        split_video_web(temp_path, 'split_video', roi = roi)
+        job["timestamps"] = [12.5, 38.0, 76.2]  # секунды (потом заменишь на свои таймкоды)
+        job["result"] = f"Готово. Запрос: {query_text or '(пусто)'}"
+
+        job["status"] = "done"
 
     except Exception as e:
-        JOBS[job_id]["status"] = "error"
-        JOBS[job_id]["error"] = str(e)
+        job["status"] = "error"
+        job["error"] = str(e)
 
 
-# -------------------- routes --------------------
+# -------------------- ROUTES --------------------
 
 @app.get("/")
 def index():
@@ -140,39 +116,73 @@ def index():
 
 @app.post("/run")
 def run():
+    """
+    1) сохраняем видео в TEMP
+    2) создаём job со статусом await_roi
+    3) редиректим на страницу /roi/<job_id>
+    """
     file = request.files.get("video_file")
     query_text = request.form.get("query_text", "").strip()
 
     if not file or not file.filename:
         return "Файл не выбран", 400
 
-    # расширение, чтобы opencv/ffmpeg нормально определяли формат
     ext = os.path.splitext(file.filename)[1].lower() or ".mp4"
-
-    # создаём временный файл и получаем путь
     fd, temp_path = tempfile.mkstemp(prefix="detective_", suffix=ext)
-    os.close(fd)  # важно закрыть дескриптор на Windows
-
-    # сохраняем загруженное видео в temp
+    os.close(fd)
     file.save(temp_path)
     _TEMP_FILES.add(temp_path)
 
     job_id = uuid.uuid4().hex
     JOBS[job_id] = {
-        "status": "processing",
+        "status": "await_roi",  # ждём ROI
         "result": "",
         "error": "",
         "temp_path": temp_path,
         "timestamps": [],
+        "roi": None,            # (x,y,w,h) пиксели
+        "query_text": query_text,
     }
 
-    threading.Thread(
-        target=process_job,
-        args=(job_id, temp_path, query_text),
-        daemon=True
-    ).start()
+    return redirect(url_for("roi", job_id=job_id))
 
-    # редирект на страницу ожидания
+
+@app.get("/roi/<job_id>")
+def roi(job_id: str):
+    """
+    Страница выбора области (ROI) поверх видео.
+    """
+    job = JOBS.get(job_id)
+    if not job:
+        return "Задача не найдена", 404
+
+    return render_template("roi.html", job_id=job_id)
+
+
+@app.post("/roi/<job_id>")
+def roi_submit(job_id: str):
+    """
+    Получаем ROI (x,y,w,h) и запускаем обработку.
+    """
+    job = JOBS.get(job_id)
+    if not job:
+        return "Задача не найдена", 404
+
+    try:
+        x = int(float(request.form.get("x", "0")))
+        y = int(float(request.form.get("y", "0")))
+        w = int(float(request.form.get("w", "0")))
+        h = int(float(request.form.get("h", "0")))
+    except ValueError:
+        return "ROI некорректен", 400
+
+    if w <= 0 or h <= 0:
+        return "ROI некорректен", 400
+
+    job["roi"] = (x, y, w, h)
+    job["status"] = "processing"
+
+    threading.Thread(target=process_job, args=(job_id,), daemon=True).start()
     return redirect(url_for("processing", job_id=job_id))
 
 
@@ -202,7 +212,7 @@ def result(job_id: str):
 @app.get("/video/<job_id>")
 def video(job_id: str):
     """
-    Отдаём видео браузеру для просмотра на result.html
+    Отдаём видео браузеру для просмотра на result/roi страницах.
     """
     job = JOBS.get(job_id)
     if not job:
@@ -216,7 +226,7 @@ def video(job_id: str):
     return send_file(path, mimetype=mime or "video/mp4", conditional=True)
 
 
-# -------------------- run server --------------------
+# -------------------- RUN --------------------
 
 def open_browser_later(url: str) -> None:
     time.sleep(0.7)

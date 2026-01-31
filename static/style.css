@@ -766,3 +766,95 @@ html, body { overflow-x: hidden; }
 .timeline-track{
   overflow: hidden; /* прячет то, что вылезает за края (метки/тени) */
 }
+
+/* ROI page */
+.roi-wrap{
+  position: relative;
+  margin-top: 10px;
+}
+
+.roi-wrap video{
+  width: 100%;
+  display: block;
+  border-radius: 18px;
+  border: 1px solid rgba(231,234,243,0.12);
+  background: rgba(0,0,0,0.35);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+}
+
+/* прямоугольник выделения */
+.roi-box{
+  position: absolute;
+  left: 10%;
+  top: 10%;
+  width: 50%;
+  height: 50%;
+  border-radius: 14px;
+  border: 2px solid rgba(122,162,255,0.95);
+  box-shadow: 0 0 0 6px rgba(122,162,255,0.16);
+  background: rgba(122,162,255,0.08);
+  cursor: move;
+  user-select: none;
+}
+
+/* -------------------- ROI resizable -------------------- */
+
+.roi-wrap{
+  position: relative;
+  margin-top: 10px;
+  border-radius: 18px;
+}
+
+/* затемнение вокруг ROI */
+.roi-dim{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.roi-dim > div{
+  position: absolute;
+  background: rgba(0,0,0,0.42);
+}
+
+/* рамка ROI */
+.roi-box{
+  position: absolute;
+  left: 10%;
+  top: 10%;
+  width: 55%;
+  height: 55%;
+  border-radius: 14px;
+  border: 2px solid rgba(122,162,255,0.95);
+  box-shadow: 0 0 0 6px rgba(122,162,255,0.16);
+  background: rgba(122,162,255,0.08);
+  cursor: move;
+  user-select: none;
+  touch-action: none; /* важно для тача */
+}
+
+/* ручки */
+.roi-handle{
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(231,234,243,0.95);
+  border: 1px solid rgba(231,234,243,0.35);
+  box-shadow: 0 0 0 4px rgba(122,162,255,0.18);
+  cursor: pointer;
+}
+
+/* углы */
+.roi-handle.nw{ left:-7px; top:-7px; cursor:nwse-resize; }
+.roi-handle.ne{ right:-7px; top:-7px; cursor:nesw-resize; }
+.roi-handle.sw{ left:-7px; bottom:-7px; cursor:nesw-resize; }
+.roi-handle.se{ right:-7px; bottom:-7px; cursor:nwse-resize; }
+
+/* стороны */
+.roi-handle.n{ left:50%; top:-7px; transform:translateX(-50%); cursor:ns-resize; }
+.roi-handle.s{ left:50%; bottom:-7px; transform:translateX(-50%); cursor:ns-resize; }
+.roi-handle.w{ left:-7px; top:50%; transform:translateY(-50%); cursor:ew-resize; }
+.roi-handle.e{ right:-7px; top:50%; transform:translateY(-50%); cursor:ew-resize; }

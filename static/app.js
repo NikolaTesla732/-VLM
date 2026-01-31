@@ -204,3 +204,220 @@ function initResultPage() {
 document.addEventListener("DOMContentLoaded", () => {
   initResultPage();
 });
+
+
+function initRoiPage(){
+  const page = document.querySelector("[data-page='roi']");
+  if (!page) return;
+
+  const video = document.getElementById("roi_video");
+  const box = document.getElementById("roi_box");
+  const wrap = document.getElementById("roi_wrap");
+
+  const inX = document.getElementById("roi_x");
+  const inY = document.getElementById("roi_y");
+  const inW = document.getElementById("roi_w");
+  const inH = document.getElementById("roi_h");
+
+  const dimTop = document.querySelector(".roi-dim-top");
+  const dimLeft = document.querySelector(".roi-dim-left");
+  const dimRight = document.querySelector(".roi-dim-right");
+  const dimBottom = document.querySelector(".roi-dim-bottom");
+
+  if (!video || !box || !wrap || !inX || !inY || !inW || !inH) return;
+
+  video.controls = true;
+
+  const MIN_W = 40; // px (на экране)
+  const MIN_H = 40;
+
+  let mode = null; // "move" or "resize"
+  let handle = null; // "nw","n","ne","w","e","sw","s","se"
+  let startMx = 0, startMy = 0;
+  let start = { left: 0, top: 0, width: 0, height: 0 };
+
+  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
+  function getWrapRect(){
+    // ROI двигаем по видимой области видео (его bbox)
+    return video.getBoundingClientRect();
+  }
+
+  function setBoxRect(left, top, width, height){
+    const r = getWrapRect();
+    left = clamp(left, 0, r.width - width);
+    top  = clamp(top, 0, r.height - height);
+
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${height}px`;
+
+    updateDim();
+    updateHiddenInputs();
+  }
+
+  function updateDim(){
+    if (!dimTop) return;
+    const r = getWrapRect();
+    const b = box.getBoundingClientRect();
+
+    const left = b.left - r.left;
+    const top  = b.top - r.top;
+    const w = b.width;
+    const h = b.height;
+
+    // top
+    dimTop.style.left = "0px";
+    dimTop.style.top = "0px";
+    dimTop.style.width = `${r.width}px`;
+    dimTop.style.height = `${top}px`;
+
+    // left
+    dimLeft.style.left = "0px";
+    dimLeft.style.top = `${top}px`;
+    dimLeft.style.width = `${left}px`;
+    dimLeft.style.height = `${h}px`;
+
+    // right
+    dimRight.style.left = `${left + w}px`;
+    dimRight.style.top = `${top}px`;
+    dimRight.style.width = `${Math.max(0, r.width - (left + w))}px`;
+    dimRight.style.height = `${h}px`;
+
+    // bottom
+    dimBottom.style.left = "0px";
+    dimBottom.style.top = `${top + h}px`;
+    dimBottom.style.width = `${r.width}px`;
+    dimBottom.style.height = `${Math.max(0, r.height - (top + h))}px`;
+  }
+
+  function updateHiddenInputs(){
+    const r = getWrapRect();
+    const b = box.getBoundingClientRect();
+
+    const relX = (b.left - r.left) / r.width;
+    const relY = (b.top - r.top) / r.height;
+    const relW = b.width / r.width;
+    const relH = b.height / r.height;
+
+    const vw = video.videoWidth || 0;
+    const vh = video.videoHeight || 0;
+
+    const x = Math.round(relX * vw);
+    const y = Math.round(relY * vh);
+    const w = Math.round(relW * vw);
+    const h = Math.round(relH * vh);
+
+    inX.value = String(Math.max(0, x));
+    inY.value = String(Math.max(0, y));
+    inW.value = String(Math.max(1, w));
+    inH.value = String(Math.max(1, h));
+  }
+
+  function beginInteraction(e, newMode, newHandle){
+    e.preventDefault();
+    mode = newMode;
+    handle = newHandle || null;
+    startMx = e.clientX;
+    startMy = e.clientY;
+    start.left = box.offsetLeft;
+    start.top = box.offsetTop;
+    start.width = box.offsetWidth;
+    start.height = box.offsetHeight;
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", endInteraction, { once: true });
+  }
+
+  function endInteraction(){
+    mode = null;
+    handle = null;
+    window.removeEventListener("mousemove", onMove);
+  }
+
+  function onMove(e){
+    const r = getWrapRect();
+    const dx = e.clientX - startMx;
+    const dy = e.clientY - startMy;
+
+    if (mode === "move"){
+      setBoxRect(start.left + dx, start.top + dy, start.width, start.height);
+      return;
+    }
+
+    if (mode === "resize"){
+      let left = start.left;
+      let top = start.top;
+      let width = start.width;
+      let height = start.height;
+
+      const right = start.left + start.width;
+      const bottom = start.top + start.height;
+
+      // по X
+      if (handle.includes("w")){
+        left = clamp(start.left + dx, 0, right - MIN_W);
+        width = right - left;
+      }
+      if (handle.includes("e")){
+        const newRight = clamp(right + dx, left + MIN_W, r.width);
+        width = newRight - left;
+      }
+
+      // по Y
+      if (handle.includes("n")){
+        top = clamp(start.top + dy, 0, bottom - MIN_H);
+        height = bottom - top;
+      }
+      if (handle.includes("s")){
+        const newBottom = clamp(bottom + dy, top + MIN_H, r.height);
+        height = newBottom - top;
+      }
+
+      // финальный clamp чтобы не вылезло
+      width = clamp(width, MIN_W, r.width);
+      height = clamp(height, MIN_H, r.height);
+
+      // если после clamp ширина/высота упирается — корректируем left/top
+      left = clamp(left, 0, r.width - width);
+      top = clamp(top, 0, r.height - height);
+
+      setBoxRect(left, top, width, height);
+    }
+  }
+
+  // Запуск: после metadata можно корректно работать с videoWidth/videoHeight
+  video.addEventListener("loadedmetadata", () => {
+    const r = getWrapRect();
+    const left = Math.round(r.width * 0.10);
+    const top = Math.round(r.height * 0.10);
+    const width = Math.round(r.width * 0.55);
+    const height = Math.round(r.height * 0.55);
+    setBoxRect(left, top, width, height);
+  });
+
+  // move (за рамку)
+  box.addEventListener("mousedown", (e) => {
+    // если клик по ручке — это resize (ниже)
+    if (e.target && e.target.classList.contains("roi-handle")) return;
+    beginInteraction(e, "move", null);
+  });
+
+  // resize (за ручки)
+  box.querySelectorAll(".roi-handle").forEach(h => {
+    h.addEventListener("mousedown", (e) => {
+      const key = e.target.getAttribute("data-h");
+      beginInteraction(e, "resize", key);
+    });
+  });
+
+  // если окно меняет размер/масштаб — пересчитать маску и hidden inputs
+  window.addEventListener("resize", () => {
+    updateDim();
+    updateHiddenInputs();
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initRoiPage();
+});
