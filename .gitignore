@@ -5,6 +5,7 @@ workspace.xml
 Videos/
 cache/
 batch_out/
+video_split/
 # Python
 __pycache__/
 *.py[cod]

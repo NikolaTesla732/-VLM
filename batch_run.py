@@ -2,41 +2,191 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from config import parse_cli
+import torch
+
 from cache_io import ensure_all_cache_dirs
+from config import parse_cli
+from index_video import index_segment_files
 from models import create_backend
-from run_one_video import process_one_video, fmt_hms
 
 
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
 
 
-def iter_videos(folder: str, *, recursive: bool = True) -> List[str]:
-    root = Path(folder)
+def fmt_hms(seconds: float) -> str:
+    seconds = float(seconds)
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = seconds % 60
+    return f"{h:02d}:{m:02d}:{s:05.2f}"
+
+
+def _iter_media_files(root: Path, *, recursive: bool) -> List[str]:
     if not root.exists():
         return []
-
-    if root.is_file():
+    if root.is_file() and root.suffix.lower() in VIDEO_EXTS:
         return [str(root)]
+    if not root.is_dir():
+        return []
 
     if recursive:
-        files = [p for p in root.rglob("*") if p.suffix.lower() in VIDEO_EXTS]
+        files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in VIDEO_EXTS]
     else:
-        files = [p for p in root.glob("*") if p.suffix.lower() in VIDEO_EXTS]
-
+        files = [p for p in root.glob("*") if p.is_file() and p.suffix.lower() in VIDEO_EXTS]
     return [str(p) for p in sorted(files)]
 
 
-def progress_bar(done: int, total: int, *, width: int = 34) -> str:
-    if total <= 0:
-        return "[?]"
-    done = max(0, min(done, total))
-    filled = int(width * done / total)
-    return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
+def _load_manifests_segments(
+    folder: str,
+    *,
+    recursive: bool,
+    manifest_name: str,
+) -> Tuple[List[str], Dict[str, Dict[str, Any]]]:
+    root = Path(folder)
+    if not root.exists():
+        return [], {}
+
+    if root.is_file():
+        return [], {}
+
+    if recursive:
+        manifests = [p for p in root.rglob("*") if p.is_file() and p.name == manifest_name]
+    else:
+        manifests = [p for p in root.glob("*") if p.is_file() and p.name == manifest_name]
+
+    seg_paths: List[str] = []
+    meta_map: Dict[str, Dict[str, Any]] = {}
+
+    for mp in sorted(manifests):
+        try:
+            with open(mp, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+        except Exception:
+            continue
+
+        if not isinstance(manifest, dict):
+            continue
+
+        segments_dir = manifest.get("segments_dir") or str(mp.parent)
+        try:
+            segments_dir = str(Path(segments_dir).resolve())
+        except Exception:
+            segments_dir = str(mp.parent.resolve())
+
+        source_video = manifest.get("source_video")
+        segment_seconds = manifest.get("segment_seconds", None)
+        use_roi = manifest.get("use_roi", None)
+        roi = manifest.get("roi", None)
+
+        items = manifest.get("segments", [])
+        if not isinstance(items, list):
+            continue
+
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+
+            fn = it.get("path") or it.get("file") or it.get("name")
+            if not fn:
+                continue
+
+            p = Path(fn)
+            if not p.is_absolute():
+                p = Path(segments_dir) / p
+            p = p.resolve()
+
+            if not p.exists() or p.suffix.lower() not in VIDEO_EXTS:
+                continue
+
+            start_time_sec = it.get("start_time_sec", None)
+            end_time_sec = it.get("end_time_sec", None)
+            try:
+                if end_time_sec is None and start_time_sec is not None and segment_seconds is not None:
+                    end_time_sec = float(start_time_sec) + float(segment_seconds)
+            except Exception:
+                pass
+
+            seg_path = str(p)
+            seg_paths.append(seg_path)
+
+            meta_map[seg_path] = {
+                "segment_path": seg_path,
+                "segment_file": p.name,
+                "segments_dir": segments_dir,
+                "manifest_path": str(mp.resolve()),
+                "source_video": source_video,
+                "source_video_file": (Path(str(source_video)).name if source_video else None),
+                "start_time_sec": start_time_sec,
+                "end_time_sec": end_time_sec,
+                "segment_seconds": segment_seconds,
+                "use_roi": use_roi,
+                "roi": roi,
+            }
+
+    seg_paths = sorted(set(seg_paths))
+    return seg_paths, meta_map
+
+
+def _merge_segment_meta(
+    seg_path: str,
+    score: float,
+    rank: int,
+    meta_map: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    base = {
+        "rank": int(rank),
+        "score": float(score),
+        "segment_path": seg_path,
+    }
+    m = meta_map.get(seg_path)
+    if not m:
+        return base
+
+    out = dict(base)
+    for k in (
+        "source_video",
+        "source_video_file",
+        "start_time_sec",
+        "end_time_sec",
+        "segment_seconds",
+        "manifest_path",
+        "segments_dir",
+        "segment_file",
+        "use_roi",
+        "roi",
+    ):
+        if k in m:
+            out[k] = m.get(k)
+
+    return out
+
+
+def _ensure_parent_dir(path: str) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+
+def _save_segment_file(src_path: str, dst_path: str, mode: str) -> None:
+    _ensure_parent_dir(dst_path)
+    mode = (mode or "copy").lower().strip()
+
+    if os.path.exists(dst_path):
+        return
+
+    if mode == "hardlink":
+        os.link(src_path, dst_path)
+        return
+
+    if mode == "symlink":
+        os.symlink(src_path, dst_path)
+        return
+
+    shutil.copy2(src_path, dst_path)
 
 
 def run_batch(
@@ -46,111 +196,146 @@ def run_batch(
     cfg: object,
     out_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Прогон по папке.
-
-    Оптимизации:
-    - модель загружается один раз
-    - text_emb считается один раз и переиспользуется для всех видео
-    """
-
     ensure_all_cache_dirs(cfg=cfg)
 
     backend = create_backend(cfg, load=True)
 
-    # куда сохранять репорты/клипы
     out_dir = out_dir or getattr(cfg, "batch_out_dir", "./batch_out")
-    clips_subdir = getattr(cfg, "clips_subdir", "clips")
-    clips_root = str(Path(out_dir) / clips_subdir)
-
     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    Path(clips_root).mkdir(parents=True, exist_ok=True)
-
-    videos = iter_videos(videos_dir, recursive=True)
-    if not videos:
-        raise RuntimeError(f"No videos found in: {videos_dir}")
 
     summary_path = str(Path(out_dir) / "summary.json")
     report_path = str(Path(out_dir) / "report.json")
 
-    # считаем text_emb один раз (ускоряет batch)
+    batch_cfg = getattr(cfg, "batch", None)
+    recursive = True
+    if batch_cfg is not None:
+        recursive = bool(getattr(batch_cfg, "recursive", True))
+
+    save_top_segments = False
+    save_top_segments_dir = "selected_segments"
+    save_top_segments_mode = "copy"
+    if batch_cfg is not None:
+        save_top_segments = bool(getattr(batch_cfg, "save_top_segments", False))
+        save_top_segments_dir = str(getattr(batch_cfg, "save_top_segments_dir", "selected_segments"))
+        save_top_segments_mode = str(getattr(batch_cfg, "save_top_segments_mode", "copy"))
+
+    manifest_name = None
+    pp = getattr(cfg, "preprocess", None)
+    if pp is not None:
+        manifest_name = getattr(pp, "manifest_name", None)
+    manifest_name = str(manifest_name) if manifest_name else "segments_manifest.json"
+
+    seg_paths, meta_map = _load_manifests_segments(videos_dir, recursive=recursive, manifest_name=manifest_name)
+
+    if not seg_paths:
+        root = Path(videos_dir)
+        seg_paths = _iter_media_files(root, recursive=recursive)
+        meta_map = {}
+        for p in seg_paths:
+            meta_map[p] = {
+                "segment_path": p,
+                "segment_file": Path(p).name,
+                "segments_dir": str(Path(p).parent),
+                "manifest_path": None,
+                "source_video": None,
+                "source_video_file": None,
+                "start_time_sec": None,
+                "end_time_sec": None,
+                "segment_seconds": None,
+                "use_roi": None,
+                "roi": None,
+            }
+
+    if not seg_paths:
+        raise RuntimeError(f"No segment videos found in: {videos_dir}")
+
+    t0 = time.perf_counter()
+
     normalize_embeddings = bool(getattr(cfg, "normalize_embeddings", True))
     text_emb = backend.encode_text([query], normalize=normalize_embeddings)
 
+    index = index_segment_files(seg_paths, backend=backend, cfg=cfg)
+
+    embs: torch.Tensor = index["embeddings"]
+    indexed_paths: List[str] = index.get("segment_paths", []) or []
+
     summary: List[Dict[str, Any]] = []
-    batch_t0 = time.perf_counter()
 
-    total_video_duration = 0.0
-    total_processing_time_ok = 0.0
-    ok_count = 0
+    if isinstance(embs, torch.Tensor) and embs.numel() > 0 and indexed_paths:
+        embs = embs.to(text_emb.device)
+        sims = (text_emb @ embs.T)[0]
 
-    avg_sec = 0.0
-    alpha = 0.25
+        top_k = int(getattr(cfg, "top_k", 5))
+        k = min(top_k, int(sims.numel()))
+        vals, idxs = torch.topk(sims, k=k)
 
-    total = len(videos)
-    for i, vp in enumerate(videos, 1):
-        print(f"\n[{i}/{total}] {vp}")
+        for rank, (score, idx) in enumerate(zip(vals.tolist(), idxs.tolist()), 1):
+            seg_path = indexed_paths[idx] if idx < len(indexed_paths) else None
+            if not seg_path:
+                continue
+            summary.append(_merge_segment_meta(seg_path, score=float(score), rank=rank, meta_map=meta_map))
+
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+
+    selected_dir = ""
+    saved_selected: List[str] = []
+    save_error: Optional[str] = None
+
+    if save_top_segments and summary:
         try:
-            res = process_one_video(
-                vp,
-                query=query,
-                backend=backend,
-                cfg=cfg,
-                clips_root=clips_root,
-                text_emb=text_emb,
-            )
-            res["ok"] = True
+            selected_dir = str(Path(out_dir) / save_top_segments_dir)
+            Path(selected_dir).mkdir(parents=True, exist_ok=True)
+
+            for item in summary:
+                seg_path = item.get("segment_path")
+                if not seg_path or not os.path.exists(seg_path):
+                    continue
+
+                rank = item.get("rank", 0)
+                score = item.get("score", None)
+
+                src_name = Path(seg_path).name
+                score_s = "na"
+                try:
+                    score_s = f"{float(score):.6f}"
+                except Exception:
+                    pass
+
+                dst_name = f"rank{int(rank):04d}_score{score_s}_{src_name}"
+                dst_path = str(Path(selected_dir) / dst_name)
+
+                _save_segment_file(str(seg_path), dst_path, mode=save_top_segments_mode)
+                saved_selected.append(dst_path)
+
         except Exception as e:
-            res = {"video": vp, "ok": False, "error": repr(e)}
-            print("  ERROR:", e)
+            save_error = repr(e)
+            selected_dir = ""
+            saved_selected = []
 
-        summary.append(res)
-
-        if res.get("ok"):
-            ok_count += 1
-            total_processing_time_ok += float(res.get("processing_time_sec", 0.0))
-            total_video_duration += float(res.get("video_duration_sec", 0.0))
-
-            cur_sec = float(res.get("processing_time_sec", 0.0))
-            if cur_sec > 0:
-                avg_sec = cur_sec if avg_sec == 0.0 else (1 - alpha) * avg_sec + alpha * cur_sec
-
-            cached = "cached" if res.get("cached_results") else ("index_cached" if res.get("cached_index") else "fresh")
-            clips_n = len(res.get("saved_clips", []))
-            print(
-                f"  -> {cached} | proc {res.get('processing_time_hms')} | "
-                f"video {res.get('video_duration_hms')} | clips {clips_n}"
-            )
-
-        elapsed_sec = time.perf_counter() - batch_t0
-        remaining = total - i
-        eta_sec = avg_sec * remaining if avg_sec > 0 else 0.0
-        bar = progress_bar(i, total)
-        pct = 100.0 * i / total if total else 0.0
-        print(f"{bar} {pct:6.2f}% | elapsed {fmt_hms(elapsed_sec)} | ETA {fmt_hms(eta_sec)}")
-
-        # incremental save summary
-        with open(summary_path, "w", encoding="utf-8") as f:
-            json.dump(summary, f, ensure_ascii=False, indent=2)
-
-    batch_elapsed = time.perf_counter() - batch_t0
+    elapsed = time.perf_counter() - t0
 
     report = {
         "videos_dir": videos_dir,
-        "num_videos_total": len(videos),
-        "num_videos_ok": ok_count,
         "query": query,
         "backend": backend.backend_name,
         "model_name": backend.model_name,
-        "total_video_duration_sec": total_video_duration,
-        "total_video_duration_hms": fmt_hms(total_video_duration),
-        "total_processing_time_sec_ok_only": total_processing_time_ok,
-        "total_processing_time_hms_ok_only": fmt_hms(total_processing_time_ok),
-        "batch_wall_time_sec": batch_elapsed,
-        "batch_wall_time_hms": fmt_hms(batch_elapsed),
+        "recursive": bool(recursive),
+        "manifest_name": manifest_name,
+        "num_segments_found": len(seg_paths),
+        "num_segments_indexed": len(indexed_paths),
+        "top_k": int(getattr(cfg, "top_k", 5)),
+        "batch_wall_time_sec": float(elapsed),
+        "batch_wall_time_hms": fmt_hms(elapsed),
         "out_dir": out_dir,
-        "clips_root": clips_root,
         "summary_path": summary_path,
+        "save_top_segments": bool(save_top_segments),
+        "save_top_segments_dir": selected_dir,
+        "save_top_segments_mode": save_top_segments_mode,
+        "saved_top_segments": saved_selected,
     }
+    if save_error is not None:
+        report["save_top_segments_error"] = save_error
 
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
@@ -158,10 +343,11 @@ def run_batch(
     print("\nDone.")
     print(f"Summary: {summary_path}")
     print(f"Report:  {report_path}")
-    print(f"Clips:   {clips_root}")
-    print(f"Total video duration: {report['total_video_duration_hms']}")
-    print(f"Total processing (ok): {report['total_processing_time_hms_ok_only']}")
-    print(f"Batch wall time:       {report['batch_wall_time_hms']}")
+    print(f"Segments indexed: {report['num_segments_indexed']}/{report['num_segments_found']}")
+    if save_top_segments:
+        print(f"Saved top segments: {len(saved_selected)} -> {selected_dir}" if selected_dir else "Saved top segments: failed")
+    print(f"Batch wall time: {report['batch_wall_time_hms']}")
+
     return report
 
 
@@ -170,7 +356,14 @@ def main() -> None:
     if run.mode != "batch":
         raise SystemExit("batch_run.py запускается только с --mode batch")
 
-    run_batch(videos_dir=run.video, query=run.query, cfg=cfg)
+    pp = getattr(cfg, "preprocess", None)
+    default_dir = getattr(pp, "splits_root_dir", None) if pp is not None else None
+    videos_dir = run.video if run.video else (str(default_dir) if default_dir else "")
+
+    if not videos_dir:
+        raise ValueError("Не задан путь к папке фрагментов: укажи --video или cfg.preprocess.splits_root_dir")
+
+    run_batch(videos_dir=videos_dir, query=run.query, cfg=cfg)
 
 
 if __name__ == "__main__":

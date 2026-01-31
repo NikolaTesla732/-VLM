@@ -1,16 +1,15 @@
 # retrieve.py
 from __future__ import annotations
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 
 from defaults import pick
-from models.base import BaseVideoTextBackend
 
 
 def cosine_sim_matrix(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    # a: [N,D], b: [M,D] -> [N,M]
+    """Cosine sim for normalized vectors; if not normalized, it still works but scales vary."""
     return a @ b.T
 
 
@@ -22,7 +21,7 @@ def frames_to_time(frame_idx: int, fps: Optional[float]) -> Optional[float]:
 
 def retrieve_topk_segments(
     index: Dict[str, Any],
-    backend: BaseVideoTextBackend,
+    backend: Any,
     query_text: str,
     *,
     top_k: Optional[int] = None,
@@ -43,7 +42,6 @@ def retrieve_topk_segments(
     if text_emb is None:
         text_emb = backend.encode_text([query_text], normalize=normalize_embeddings)  # [1,D]
     else:
-        # если дали извне — предполагаем, что нормализация уже соответствует cfg
         if text_emb.dim() != 2 or text_emb.shape[0] != 1:
             raise ValueError("text_emb must be [1,D]")
 
@@ -51,6 +49,9 @@ def retrieve_topk_segments(
     video_embs: torch.Tensor = index["embeddings"]
     if not isinstance(video_embs, torch.Tensor):
         raise TypeError("index['embeddings'] must be torch.Tensor")
+
+    if video_embs.numel() == 0 or video_embs.shape[0] == 0:
+        return []
 
     # считаем similarity на device, где text_emb (обычно backend.device)
     video_embs = video_embs.to(text_emb.device)
@@ -71,6 +72,7 @@ def retrieve_topk_segments(
                 "end_frame": int(e),
                 "start_time_sec": frames_to_time(s, fps),
                 "end_time_sec": frames_to_time(e, fps),
+                "segment_path": (index.get("segment_paths")[clip_i] if isinstance(index.get("segment_paths"), list) and clip_i < len(index.get("segment_paths")) else None),
             }
         )
     return results

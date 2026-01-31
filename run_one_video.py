@@ -20,17 +20,12 @@ from cache_io import (
     stable_hash,
     results_matches_cfg,
 )
-from index_video import index_video_segments
+from index_video import index_video_segments, index_presegmented_manifest
 from retrieve import retrieve_topk_segments
 from models.base import BaseVideoTextBackend
 
 
-# ----------------------------
-# utils
-# ----------------------------
-
 def safe_name(s: str, max_len: int = 90) -> str:
-    """Безопасное имя для файлов/папок."""
     s = re.sub(r"[^\w\-\.\(\) ]+", "_", s, flags=re.UNICODE).strip()
     s = re.sub(r"\s+", " ", s).strip()
     return s[:max_len] if len(s) > max_len else s
@@ -45,7 +40,6 @@ def fmt_hms(seconds: float) -> str:
 
 
 def extract_top_times(results_list: List[Dict[str, Any]], n: int) -> List[Dict[str, Any]]:
-    """Достаёт start/end для top-N результатов."""
     n = max(0, int(n))
     out: List[Dict[str, Any]] = []
     for i, r in enumerate((results_list or [])[:n], 1):
@@ -57,17 +51,13 @@ def extract_top_times(results_list: List[Dict[str, Any]], n: int) -> List[Dict[s
                 "end_time_sec": r.get("end_time_sec"),
                 "start_frame": r.get("start_frame"),
                 "end_frame": r.get("end_frame"),
+                "segment_path": r.get("segment_path"),
             }
         )
     return out
 
 
-# ----------------------------
-# fingerprints (cache keys)
-# ----------------------------
-
 def _index_fingerprint(cfg: object, backend: BaseVideoTextBackend) -> Dict[str, Any]:
-    """То, что влияет на индекс (эмбеддинги клипов)."""
     return {
         "backend": backend.fingerprint(),
         "clip_len_frames": int(getattr(cfg, "clip_len_frames", 0)),
@@ -80,23 +70,12 @@ def _index_fingerprint(cfg: object, backend: BaseVideoTextBackend) -> Dict[str, 
 
 
 def _results_fingerprint(cfg: object, backend: BaseVideoTextBackend) -> Dict[str, Any]:
-    """То, что влияет на готовые результаты (answers/topk).
-
-    top_k НЕ включаю специально:
-    - Если в сохранённых results есть results_list длиной >= top_k, можно просто отдать первые top_k.
-    - Если меньше — пересчитываем.
-    """
     return {
         "index": _index_fingerprint(cfg, backend),
         "backend": backend.fingerprint(),
         "normalize_embeddings": bool(getattr(cfg, "normalize_embeddings", True)),
-        # топ-k намеренно исключён из fingerprint
     }
 
-
-# ----------------------------
-# ffmpeg tools (optional)
-# ----------------------------
 
 _FFMPEG_OK: Optional[bool] = None
 
@@ -114,7 +93,7 @@ def ensure_ffmpeg_tools() -> None:
         _FFMPEG_OK = True
     except Exception as e:
         _FFMPEG_OK = False
-        raise e
+        raise FileNotFoundError(f"ffmpeg/ffprobe not available: {e}")
 
 
 def video_duration_sec_ffprobe(video_path: str) -> float:
@@ -128,9 +107,10 @@ def video_duration_sec_ffprobe(video_path: str) -> float:
         "default=noprint_wrappers=1:nokey=1",
         video_path,
     ]
-    p = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    p = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    s = (p.stdout or b"").decode("utf-8", errors="ignore").strip()
     try:
-        return float(p.stdout.strip())
+        return float(s)
     except Exception:
         return 0.0
 
@@ -225,34 +205,17 @@ def export_topk_clips(
     return saved
 
 
-# =========================================================
-# MAIN
-# =========================================================
-
 def process_one_video(
     video_path: str,
     *,
     query: str,
     backend: BaseVideoTextBackend,
     cfg: object,
+    presegmented_manifest_path: Optional[str] = None,
     cfg_full: Optional[dict] = None,
     clips_root: Optional[str] = None,
     text_emb: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """
-    Пайплайн для одного видео:
-
-    - (опц.) results cache READ (строго регулируется use_cached_results)
-    - index cache (load/build)
-    - retrieve
-    - (опц.) results cache WRITE
-    - (опц.) export clips
-    - stage_times + index_profile (decode/encode)
-
-    Требование пользователя:
-    - ранее сохранённые ответы НЕ использовать по умолчанию
-    """
-
     ensure_all_cache_dirs(cfg=cfg)
 
     if cfg_full is None:
@@ -261,7 +224,23 @@ def process_one_video(
         except Exception:
             cfg_full = {"cfg": str(cfg)}
 
-    # knobs
+    t_meta0 = time.perf_counter()
+    dur_sec = 0.0
+    try:
+        ensure_ffmpeg_tools()
+        dur_sec = video_duration_sec_ffprobe(video_path)
+    except Exception:
+        dur_sec = 0.0
+    t_meta1 = time.perf_counter()
+
+    stage: Dict[str, Any] = {}
+
+    def _mark(name: str, t0: float, t1: float) -> None:
+        stage[f"{name}_sec"] = float(t1 - t0)
+        stage[f"{name}_hms"] = fmt_hms(stage[f"{name}_sec"])
+
+    _mark("video_meta", t_meta0, t_meta1)
+
     top_k = int(getattr(cfg, "top_k", 5))
     save_top_n_times = int(getattr(cfg, "save_top_n_times", top_k))
 
@@ -269,20 +248,33 @@ def process_one_video(
     strict_cache_match = bool(getattr(cfg, "strict_cache_match", True))
     force_reindex = bool(getattr(cfg, "force_reindex", False))
 
-    # results cache: write + read flag separated
     save_results = bool(getattr(cfg, "save_results", True)) if hasattr(cfg, "save_results") else bool(getattr(cfg, "cache_results", True))
-    use_cached_results = bool(getattr(cfg, "use_cached_results", False)) if hasattr(cfg, "use_cached_results") else bool(getattr(cfg, "use_results_cache", False))
-
+    use_cached_results = bool(getattr(cfg, "use_results_cache", False))
     export_clips = bool(getattr(cfg, "export_clips", False))
+
     export_top_k = int(getattr(cfg, "export_top_k", top_k))
     pad_sec = float(getattr(cfg, "pad_sec", 2.0))
     reencode = bool(getattr(cfg, "reencode", True))
 
-    # fingerprints
     index_fp = _index_fingerprint(cfg, backend)
     results_fp = _results_fingerprint(cfg, backend)
 
-    # paths (требуют cache_io версии с backend_name/model_name/fingerprints)
+    manifest_hash = None
+    manifest_payload = None
+    if presegmented_manifest_path:
+        import json
+
+        with open(presegmented_manifest_path, "r", encoding="utf-8") as f:
+            manifest_payload = json.load(f)
+        manifest_hash = stable_hash(manifest_payload)
+        index_fp = dict(index_fp)
+        index_fp["presegmented"] = True
+        index_fp["manifest_hash"] = manifest_hash
+        results_fp = dict(results_fp)
+        results_fp["index"] = index_fp
+        results_fp["presegmented"] = True
+        results_fp["manifest_hash"] = manifest_hash
+
     index_path = make_index_path(
         video_path=video_path,
         backend_name=backend.backend_name,
@@ -299,27 +291,8 @@ def process_one_video(
         cfg=cfg,
     )
 
-    # stage timing
-    stage: Dict[str, Any] = {}
-
-    def _mark(name: str, t0: float, t1: float) -> None:
-        stage[f"{name}_sec"] = float(t1 - t0)
-        stage[f"{name}_hms"] = fmt_hms(stage[f"{name}_sec"])
-
     t_total0 = time.perf_counter()
 
-    # video meta (optional)
-    t_meta0 = time.perf_counter()
-    dur_sec = 0.0
-    try:
-        ensure_ffmpeg_tools()
-        dur_sec = video_duration_sec_ffprobe(video_path)
-    except Exception:
-        dur_sec = 0.0
-    t_meta1 = time.perf_counter()
-    _mark("video_meta", t_meta0, t_meta1)
-
-    # 1) results cache READ (строго по use_cached_results)
     t_cache0 = time.perf_counter()
     if use_cached_results and os.path.exists(results_path):
         payload = load_results_json(results_path)
@@ -341,6 +314,8 @@ def process_one_video(
 
                 return {
                     "video": video_path,
+                    "presegmented_manifest_path": presegmented_manifest_path,
+                    "manifest_hash": manifest_hash,
                     "query": query,
                     "backend": backend.backend_name,
                     "model_name": backend.model_name,
@@ -362,7 +337,6 @@ def process_one_video(
     t_cache1 = time.perf_counter()
     _mark("cache_check", t_cache0, t_cache1)
 
-    # 2) index load/build
     t_index0 = time.perf_counter()
 
     index: Optional[Dict[str, Any]] = None
@@ -377,7 +351,10 @@ def process_one_video(
     index_profile = {"decode_sec_total": 0.0, "encode_sec_total": 0.0, "clips": 0, "batches": 0}
 
     if index is None:
-        index = index_video_segments(video_path, backend=backend, cfg=cfg)
+        if presegmented_manifest_path:
+            index = index_presegmented_manifest(presegmented_manifest_path, backend=backend, cfg=cfg)
+        else:
+            index = index_video_segments(video_path, backend=backend, cfg=cfg)
         timing = index.get("timing", {}) if isinstance(index, dict) else {}
         index_profile["decode_sec_total"] = float(timing.get("decode_sec", 0.0))
         index_profile["encode_sec_total"] = float(timing.get("encode_sec", 0.0))
@@ -390,23 +367,22 @@ def process_one_video(
     t_index1 = time.perf_counter()
     _mark("index_build_or_load", t_index0, t_index1)
 
-    # 3) retrieve
     t_ret0 = time.perf_counter()
     results_list = retrieve_topk_segments(index, backend=backend, query_text=query, cfg=cfg, text_emb=text_emb)
-    # retrieve_topk_segments вернёт top_k согласно cfg — но мы ещё подстрахуемся
     results_list = (results_list or [])[:top_k]
     t_ret1 = time.perf_counter()
     _mark("retrieve", t_ret0, t_ret1)
 
     top_times = extract_top_times(results_list, save_top_n_times)
 
-    # 4) save results (WRITE only)
     t_save0 = time.perf_counter()
     if save_results:
         save_results_json(
             results_path,
             {
                 "video": video_path,
+                "presegmented_manifest_path": presegmented_manifest_path,
+                "manifest_hash": manifest_hash,
                 "query": query,
                 "backend": backend.backend_name,
                 "model_name": backend.model_name,
@@ -414,16 +390,13 @@ def process_one_video(
                 "index_fingerprint": index_fp,
                 "results_fingerprint": results_fp,
                 "cfg_hash": stable_hash(results_fp),
-                # сохраняем ПОЛНЫЙ список, чтобы потом можно было слайсить top_k
                 "results_list": results_list,
                 "top_times": top_times,
-                "note": "results are NOT reused unless use_cached_results=True / use_results_cache=True",
             },
         )
     t_save1 = time.perf_counter()
     _mark("save_results", t_save0, t_save1)
 
-    # 5) export clips (optional)
     t_exp0 = time.perf_counter()
     saved_clips: List[str] = []
     clips_dir = ""
@@ -459,13 +432,14 @@ def process_one_video(
     t_exp1 = time.perf_counter()
     _mark("export", t_exp0, t_exp1)
 
-    # total
     elapsed = time.perf_counter() - t_total0
     stage["total_sec"] = float(elapsed)
     stage["total_hms"] = fmt_hms(elapsed)
 
     out: Dict[str, Any] = {
         "video": video_path,
+        "presegmented_manifest_path": presegmented_manifest_path,
+        "manifest_hash": manifest_hash,
         "query": query,
         "backend": backend.backend_name,
         "model_name": backend.model_name,
